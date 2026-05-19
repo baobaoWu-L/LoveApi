@@ -74,6 +74,8 @@ export default defineConfig(({ envMode }) => {
       distPath: {
         root: 'dist',
       },
+      // GitHub Pages subpath support (e.g., /LoveApi/)
+      assetPrefix: process.env.VITE_PAGES_BASE || '',
       // Rely on Rsbuild default legalComments ("linked" → per-chunk *.LICENSE.txt) in all modes.
       // Do not set "none" in production: that strips minifier-preserved third-party notices and
       // extracted license files, which some distributions require for open-source compliance.

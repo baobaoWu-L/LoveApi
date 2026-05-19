@@ -92,12 +92,16 @@ const queryClient = new QueryClient({
   }),
 })
 
+// GitHub Pages subpath support (set VITE_PAGES_BASE env var during build)
+const pagesBase = import.meta.env.VITE_PAGES_BASE || ''
+
 // Create a new router instance
 const router = createRouter({
   routeTree,
   context: { queryClient },
   defaultPreload: 'intent',
   defaultPreloadStaleTime: 0,
+  basepath: pagesBase,
 })
 
 // Register the router instance for type safety
