@@ -54,6 +54,12 @@ export default defineConfig(({ envMode }) => {
       entry: {
         index: './src/main.tsx',
       },
+      // Ensure VITE_PAGES_BASE is available as import.meta.env in browser code
+      define: {
+        'import.meta.env.VITE_PAGES_BASE': JSON.stringify(
+          process.env.VITE_PAGES_BASE || env.rawPublicVars.VITE_PAGES_BASE || '',
+        ),
+      },
     },
     resolve: {
       alias: {
