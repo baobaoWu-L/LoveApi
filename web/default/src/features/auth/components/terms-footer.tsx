@@ -69,7 +69,7 @@ export function TermsFooter({
       {firstLink && (
         <a
           href={firstLink.href}
-          className='hover:text-primary underline underline-offset-4'
+          className='text-foreground/70 hover:text-foreground underline underline-offset-4'
         >
           {firstLink.label}
         </a>
@@ -80,7 +80,7 @@ export function TermsFooter({
           {t('and')}{' '}
           <a
             href={secondLink.href}
-            className='hover:text-primary underline underline-offset-4'
+            className='text-foreground/70 hover:text-foreground underline underline-offset-4'
           >
             {secondLink.label}
           </a>

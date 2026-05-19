@@ -438,7 +438,7 @@ export function OverviewDashboard() {
       const result = await getApiKeys({ p: 1, size: 10 })
       return result.success ? (result.data?.items ?? []) : []
     },
-    staleTime: 60 * 1000,
+    staleTime: 0,
   })
 
   const modelsQuery = useQuery({
@@ -529,6 +529,17 @@ export function OverviewDashboard() {
     [isAdmin, quickActions]
   )
 
+  const selectedModel = useMemo(() => {
+    if (preferredKey?.model_limits_enabled && preferredKey?.model_limits) {
+      const models = preferredKey.model_limits.split(',').filter(Boolean)
+      if (models.length > 0) return models[0]
+    }
+    if (preferredKey) {
+      return modelsQuery.data?.[0] ?? ''
+    }
+    return ''
+  }, [preferredKey, modelsQuery.data])
+
   const heroSignals = useMemo<HeroSignal[]>(
     () => [
       {
@@ -543,33 +554,32 @@ export function OverviewDashboard() {
       },
       {
         label: t('Model selected'),
-        value: modelsQuery.data?.[0] ?? t('Loading'),
+        value: selectedModel,
         icon: Timer,
       },
     ],
-    [apiInfoItems.length, modelsQuery.data, preferredKey, t]
+    [apiInfoItems.length, preferredKey, selectedModel, t]
   )
 
   const requestExample = useMemo<RequestExample>(() => {
     const endpoint = normalizeEndpoint(apiInfoItems[0]?.url)
-    const model = modelsQuery.data?.[0] ?? 'gpt-4o-mini'
     const apiKey = realKeyQuery.data ?? ''
     const keyName = preferredKey?.name ?? t('No API key yet')
-    const ready = Boolean(apiKey && model)
+    const ready = Boolean(apiKey && selectedModel)
 
     return {
       endpoint,
-      model,
+      model: selectedModel,
       keyName,
       displayKey: formatDisplayKey(apiKey),
       ready,
       curl: buildCurlCommand({
         endpoint,
         apiKey: apiKey || 'sk-...',
-        model,
+        model: selectedModel,
       }),
     }
-  }, [apiInfoItems, modelsQuery.data, preferredKey, realKeyQuery.data, t])
+  }, [apiInfoItems, preferredKey, realKeyQuery.data, selectedModel, t])
 
   const completedStepCount = startSteps.filter((step) => step.completed).length
   const setupComplete = completedStepCount === startSteps.length

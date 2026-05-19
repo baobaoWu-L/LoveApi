@@ -18,6 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { Settings, Zap, BarChart3 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import { motion } from 'motion/react'
 import { AnimateInView } from '@/components/animate-in-view'
 
 export function HowItWorks() {
@@ -25,7 +26,7 @@ export function HowItWorks() {
 
   const steps = [
     {
-      num: '1',
+      num: '01',
       title: t('Configure'),
       desc: t(
         'Add your API keys, set up channels and configure access permissions'
@@ -33,7 +34,7 @@ export function HowItWorks() {
       icon: <Settings className='size-6' strokeWidth={1.5} />,
     },
     {
-      num: '2',
+      num: '02',
       title: t('Connect'),
       desc: t(
         'Connect through OpenAI, Claude, Gemini, and other compatible API routes'
@@ -41,7 +42,7 @@ export function HowItWorks() {
       icon: <Zap className='size-6' strokeWidth={1.5} />,
     },
     {
-      num: '3',
+      num: '03',
       title: t('Monitor'),
       desc: t('Track usage, costs and performance with real-time analytics'),
       icon: <BarChart3 className='size-6' strokeWidth={1.5} />,
@@ -49,35 +50,39 @@ export function HowItWorks() {
   ]
 
   return (
-    <section className='border-border/40 relative z-10 border-t px-6 py-24 md:py-32'>
+    <section className='border-border/30 relative z-10 border-t px-6 py-24 md:py-32'>
       <div className='mx-auto max-w-6xl'>
         <AnimateInView className='mb-16 text-center md:mb-20'>
-          <p className='text-muted-foreground mb-3 text-xs font-medium tracking-widest uppercase'>
+          <p className='text-muted-foreground/50 mb-4 text-[11px] font-medium tracking-[0.2em] uppercase'>
             {t('How It Works')}
           </p>
-          <h2 className='text-2xl font-bold tracking-tight md:text-3xl'>
+          <h2 className='text-3xl font-bold tracking-tight md:text-4xl'>
             {t('Three steps to get started')}
           </h2>
         </AnimateInView>
 
-        <div className='grid gap-8 md:grid-cols-3 md:gap-12'>
+        <div className='grid gap-12 md:grid-cols-3 md:gap-16'>
           {steps.map((step, i) => (
             <AnimateInView
               key={step.num}
               delay={i * 150}
               animation='fade-up'
-              className='relative flex flex-col items-center text-center'
+              className='flex flex-col items-center text-center'
             >
-              <div className='relative mb-6'>
-                <div className='text-muted-foreground border-border/50 bg-muted/30 flex size-16 items-center justify-center rounded-2xl border transition-colors'>
+              <motion.div
+                className='relative mb-8'
+                whileHover={{ scale: 1.03, y: -2 }}
+                transition={{ type: 'spring', stiffness: 300, damping: 20 }}
+              >
+                <div className='text-muted-foreground border-border/30 bg-background flex size-16 items-center justify-center border transition-colors'>
                   {step.icon}
                 </div>
-                <div className='bg-foreground text-background absolute -top-2 -right-2 flex size-6 items-center justify-center rounded-full text-xs font-bold'>
+                <span className='text-muted-foreground/50 absolute -top-2.5 -right-2.5 text-[10px] font-mono font-medium'>
                   {step.num}
-                </div>
-              </div>
-              <h3 className='mb-2 text-base font-semibold'>{step.title}</h3>
-              <p className='text-muted-foreground max-w-[240px] text-sm leading-relaxed'>
+                </span>
+              </motion.div>
+              <h3 className='mb-3 text-base font-semibold'>{step.title}</h3>
+              <p className='text-muted-foreground/60 max-w-[220px] text-sm leading-relaxed'>
                 {step.desc}
               </p>
             </AnimateInView>
