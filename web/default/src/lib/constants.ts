@@ -23,7 +23,7 @@ For commercial licensing, please contact support@quantumnous.com
 // System Configuration Defaults
 export const DEFAULT_SYSTEM_NAME = 'Love API'
 const base = import.meta.env.VITE_PAGES_BASE || ''
-export const DEFAULT_LOGO = `${base}/logo.png`
+export const DEFAULT_LOGO = `${base}/LoveApi.png`
 
 // LocalStorage Keys
 export const STORAGE_KEYS = {
