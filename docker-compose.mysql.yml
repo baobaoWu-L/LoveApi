@@ -24,11 +24,12 @@ services:
       - ./data:/data
       - ./logs:/app/logs
     environment:
-      - SQL_DSN=root:123456@tcp(mysql:3306)/love_api?charset=utf8mb4&parseTime=True&loc=Local
-      - REDIS_CONN_STRING=redis://:LoveApi2024@redis:6379
+      - SQL_DSN=root:Aa1qwaszx!23?@tcp(mysql:3306)/love_api?charset=utf8mb4&parseTime=True&loc=Local
+      - REDIS_CONN_STRING=redis://:N8eXXxLcMFWXtUNS@redis:6379
       - TZ=Asia/Shanghai
-      - SESSION_SECRET=change-this-to-a-random-string-in-production
-      - BATCH_UPDATE_ENABLED=true
+      - SESSION_SECRET=b4b6d672d51cae2b56fb0be753c70667a35b2d1e4ba0eaec9fa8efa7cd0aa3b2
+      - ERROR_LOG_ENABLED=true # 是否启用错误日志记录 (Whether to enable error log recording)
+      - BATCH_UPDATE_ENABLED=true  # 是否启用批量更新 (Whether to enable batch update)
     depends_on:
       - redis
       - mysql
@@ -41,7 +42,7 @@ services:
     restart: always
     ports:
       - "6379:6379"
-    command: ["redis-server", "--requirepass", "LoveApi2024"]
+    command: ["redis-server", "--requirepass", "N8eXXxLcMFWXtUNS"]
     networks:
       - love-api-network
 
@@ -52,7 +53,7 @@ services:
     ports:
       - "3306:3306"
     environment:
-      MYSQL_ROOT_PASSWORD: 123456
+      MYSQL_ROOT_PASSWORD: Aa1qwaszx!23?
       MYSQL_DATABASE: love_api
     volumes:
       - mysql_data:/var/lib/mysql
