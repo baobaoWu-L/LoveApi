@@ -1,6 +1,6 @@
 <div align="center">
 
-![new-api](/web/default/public/logo.png)
+![Love-api](/web/default/public/logo.png)
 
 # Love API
 
