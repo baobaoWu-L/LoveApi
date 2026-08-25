@@ -17,7 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { Link } from '@tanstack/react-router'
-import { ArrowRight } from 'lucide-react'
+import { ArrowRight, FileText } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { motion } from 'motion/react'
 import { Button } from '@/components/ui/button'
@@ -70,15 +70,15 @@ export function Hero(props: HeroProps) {
           className='landing-animate-fade-up text-muted-foreground/70 mt-6 max-w-lg text-base leading-relaxed opacity-0 md:text-lg'
           style={{ animationDelay: '80ms' }}
         >
-          {t('Power AI applications, manage digital assets, connect the Future')}
+          {t('Explore AI models, find what works for you, and bring your ideas to life')}
         </p>
         <div
-          className='landing-animate-fade-up mt-8 flex items-center gap-3 opacity-0'
+          className='landing-animate-fade-up mt-8 flex flex-wrap items-center justify-center gap-2 opacity-0'
           style={{ animationDelay: '160ms' }}
         >
           {props.isAuthenticated ? (
             <Button
-              className='group rounded-full px-6'
+              className='group rounded-full px-5'
               render={<Link to='/dashboard' />}
             >
               {t('Go to Dashboard')}
@@ -87,7 +87,7 @@ export function Hero(props: HeroProps) {
           ) : (
             <>
               <Button
-                className='group rounded-full px-6'
+                className='group rounded-full px-5'
                 render={<Link to='/sign-up' />}
               >
                 {t('Get Started')}
@@ -95,10 +95,17 @@ export function Hero(props: HeroProps) {
               </Button>
               <Button
                 variant='outline'
-                className='rounded-full border-foreground/20 px-6 hover:bg-foreground/5'
+                className='rounded-full border-foreground/20 px-5 hover:bg-foreground/5 whitespace-nowrap'
                 render={<Link to='/pricing' />}
               >
-                {t('View Pricing')}
+                {t('Model Square')}
+              </Button>
+              <Button
+                variant='outline'
+                className='rounded-full border-foreground/20 px-5 hover:bg-foreground/5 whitespace-nowrap'
+                render={<Link to='/api-doc' />}
+              >
+                API 文档
               </Button>
             </>
           )}

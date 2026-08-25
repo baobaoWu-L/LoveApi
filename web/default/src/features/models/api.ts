@@ -239,6 +239,18 @@ export async function getMissingModels(): Promise<MissingModelsResponse> {
 }
 
 /**
+ * Sync models from pricing config into model metadata table
+ */
+export async function syncFromPricing(): Promise<{
+  success: boolean
+  message?: string
+  data?: { added: number }
+}> {
+  const res = await api.post('/api/models/sync_from_pricing')
+  return res.data
+}
+
+/**
  * Get prefill groups
  */
 export async function getPrefillGroups(

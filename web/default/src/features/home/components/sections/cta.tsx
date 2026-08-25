@@ -17,7 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { Link } from '@tanstack/react-router'
-import { ArrowRight } from 'lucide-react'
+import { ArrowRight, FileText } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import { AnimateInView } from '@/components/animate-in-view'
@@ -58,9 +58,9 @@ export function CTA(props: CTAProps) {
             'Deploy your own gateway and start routing requests through your configured upstream services.'
           )}
         </p>
-        <div className='mt-8 flex items-center justify-center gap-3'>
+        <div className='mt-8 flex flex-wrap items-center justify-center gap-2'>
           <Button
-            className='group rounded-full px-8'
+            className='group rounded-full px-6'
             render={<Link to='/sign-up' />}
           >
             {t('Get Started')}
@@ -68,10 +68,17 @@ export function CTA(props: CTAProps) {
           </Button>
           <Button
             variant='outline'
-            className='rounded-full border-foreground/20 px-8 hover:bg-foreground/5'
+            className='rounded-full border-foreground/20 px-6 hover:bg-foreground/5 whitespace-nowrap'
             render={<Link to='/pricing' />}
           >
-            {t('View Pricing')}
+            {t('Model Square')}
+          </Button>
+          <Button
+            variant='outline'
+            className='rounded-full border-foreground/20 px-6 hover:bg-foreground/5 whitespace-nowrap'
+            render={<Link to='/api-doc' />}
+          >
+            API 文档
           </Button>
         </div>
       </AnimateInView>

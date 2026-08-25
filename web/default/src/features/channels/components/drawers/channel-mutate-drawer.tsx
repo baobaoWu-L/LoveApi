@@ -627,6 +627,11 @@ export function ChannelMutateDrawer({
   useEffect(() => {
     if (isEditing) return // Don't auto-set defaults when editing
 
+    // Auto-populate models when creating a new channel
+    if (allModelsList.length > 0) {
+      form.setValue('models', formatModelsArray(allModelsList))
+    }
+
     // Type 45 (VolcEngine) - set default base_url
     if (currentType === 45) {
       const currentBaseUrlValue = form.getValues('base_url')
@@ -642,7 +647,7 @@ export function ChannelMutateDrawer({
         form.setValue('other', 'v2.1')
       }
     }
-  }, [currentType, isEditing, form])
+  }, [currentType, isEditing, form, allModelsList])
 
   // Validate base_url - warn if it ends with /v1
   useEffect(() => {

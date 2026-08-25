@@ -61,8 +61,8 @@ export function Features(_props: FeaturesProps) {
     },
     {
       id: 'developer',
-      title: t('Developer Friendly'),
-      desc: t('Compatible API routes for common AI application workflows'),
+      title: t('Easy to Use'),
+      desc: t('Simple and intuitive, ready to use with any AI application'),
       icon: <Code className='size-5' strokeWidth={1.5} />,
     },
     {
@@ -99,7 +99,7 @@ export function Features(_props: FeaturesProps) {
             {t('Core Features')}
           </p>
           <h2 className='text-3xl leading-tight font-bold tracking-tight md:text-4xl'>
-            {t('Built for developers,')}
+            {t('Built for everyone,')}
             <br />
             <span className='text-foreground/60 font-light'>
               {t('designed for scale')}

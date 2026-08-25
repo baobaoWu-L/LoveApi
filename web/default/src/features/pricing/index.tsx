@@ -18,6 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { useCallback, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { Mail } from 'lucide-react'
 import { PublicLayout } from '@/components/layout'
 import { PageTransition } from '@/components/page-transition'
 import {
@@ -128,6 +129,7 @@ export function Pricing() {
           usdExchangeRate={usdExchangeRate}
           tokenUnit={tokenUnit}
           showRechargePrice={showRechargePrice}
+          groupFilter={groupFilter}
         />
       )
     }
@@ -140,6 +142,7 @@ export function Pricing() {
         tokenUnit={tokenUnit}
         showRechargePrice={showRechargePrice}
         onModelClick={handleModelClick}
+        groupFilter={groupFilter}
       />
     )
   }
@@ -258,6 +261,20 @@ export function Pricing() {
               {renderPricingContent()}
             </main>
           </div>
+
+          {/* Footer with contact email */}
+          <footer className='mt-12 border-t pt-8 text-center'>
+            <p className='text-muted-foreground/30 mx-auto mb-4 max-w-lg text-xs leading-relaxed'>
+              {t('High-performance intelligent aggregation gateway, integrating mainstream AI models to provide you with a stable, efficient, and seamless API relay experience.')}
+            </p>
+            <a
+              href='mailto:lovebreakerbaobao@gmail.com'
+              className='text-muted-foreground/40 hover:text-muted-foreground/70 inline-flex items-center gap-1.5 text-xs transition-colors'
+            >
+              <Mail className='h-3 w-3' />
+              {t('Contact admin')}
+            </a>
+          </footer>
 
           {selectedModel && (
             <ModelDetailsDrawer

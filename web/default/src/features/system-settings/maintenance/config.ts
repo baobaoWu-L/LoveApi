@@ -25,6 +25,7 @@ export type HeaderNavModulesConfig = {
   home: boolean
   console: boolean
   pricing: HeaderNavAccessConfig
+  'api-doc': boolean
   rankings: HeaderNavAccessConfig
   docs: boolean
   about: boolean
@@ -45,6 +46,7 @@ export const HEADER_NAV_DEFAULT: HeaderNavModulesConfig = {
     enabled: true,
     requireAuth: false,
   },
+  'api-doc': true,
   rankings: {
     enabled: true,
     requireAuth: false,

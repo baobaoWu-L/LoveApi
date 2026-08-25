@@ -80,6 +80,14 @@ export function getDynamicDisplayGroupRatio(model: PricingModel): number {
   return minRatio === Number.POSITIVE_INFINITY ? 1 : minRatio
 }
 
+export function getDynamicGroupRatio(
+  model: PricingModel,
+  selectedGroup: string
+): number {
+  const ratios = model.group_ratio || {}
+  return ratios[selectedGroup] ?? 1
+}
+
 function applyRechargeRate(
   price: number,
   showWithRecharge: boolean,

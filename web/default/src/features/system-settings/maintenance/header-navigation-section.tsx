@@ -45,6 +45,7 @@ const headerNavSchema = z.object({
   console: z.boolean(),
   pricingEnabled: z.boolean(),
   pricingRequireAuth: z.boolean(),
+  apiDoc: z.boolean(),
   rankingsEnabled: z.boolean(),
   rankingsRequireAuth: z.boolean(),
   docs: z.boolean(),
@@ -73,6 +74,10 @@ const toFormValues = (config: HeaderNavModulesConfig): HeaderNavFormValues => ({
     config.pricing?.requireAuth === undefined
       ? HEADER_NAV_DEFAULT.pricing.requireAuth
       : Boolean(config.pricing.requireAuth),
+  apiDoc:
+    config['api-doc'] === undefined
+      ? HEADER_NAV_DEFAULT['api-doc']
+      : Boolean(config['api-doc']),
   rankingsEnabled:
     config.rankings?.enabled === undefined
       ? HEADER_NAV_DEFAULT.rankings.enabled
@@ -111,6 +116,7 @@ export function HeaderNavigationSection({
       ...config,
       home: values.home,
       console: values.console,
+      'api-doc': values.apiDoc,
       docs: values.docs,
       about: values.about,
       pricing: {
@@ -164,6 +170,11 @@ export function HeaderNavigationSection({
       key: 'about',
       title: t('About'),
       description: t('Static page describing the platform.'),
+    },
+    {
+      key: 'apiDoc',
+      title: 'API 文档',
+      description: 'API 接口文档和技术指南。',
     },
   ]
 
