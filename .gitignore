@@ -35,3 +35,7 @@ data/
 .test
 token_estimator_test.go
 skills-lock.json
+
+# 本地数据库备份与编译产物，避免误提交
+love_api_backup.sql
+loveapi
