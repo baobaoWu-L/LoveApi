@@ -1,38 +1,38 @@
-# Love API - MySQL Compose 配置
+# Love API - MySQL Compose（backend + frontend + redis + mysql 一体化，项目 loveapiplatform）
 # 使用方式:
 #   docker compose -f docker-compose.mysql.yml up -d
-#   访问 http://服务器IP:3000
-#
-# 首次登录:
-#   访问 http://服务器IP:3000
-#   默认账号: root
-#   默认密码: 123456
-#
-# ⚠️ 生产部署前务必修改所有默认密码！
+#   访问 http://服务器IP:3001 （前端由 nginx 承载，/api 反代到 backend）
 
 services:
-  love-api:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: love-api
+  backend:
+    image: love-api:latest
+    container_name: love-api-backend
     restart: always
     command: --log-dir /app/logs
-    ports:
-      - "3000:3000"
     volumes:
       - ./data:/data
       - ./logs:/app/logs
     environment:
-      - SQL_DSN=root:Aa1qwaszx!23?@tcp(mysql:3306)/love_api?charset=utf8mb4&parseTime=True&loc=Local
-      - REDIS_CONN_STRING=redis://:N8eXXxLcMFWXtUNS@redis:6379
+      - SQL_DSN=root:love-api-lovebreaker-2004@tcp(mysql:3306)/love_api?charset=utf8mb4&parseTime=True&loc=Local
+      - REDIS_CONN_STRING=redis://:love-api-lovebreaker-2004@redis:6379
       - TZ=Asia/Shanghai
-      - SESSION_SECRET=b4b6d672d51cae2b56fb0be753c70667a35b2d1e4ba0eaec9fa8efa7cd0aa3b2
-      - ERROR_LOG_ENABLED=true # 是否启用错误日志记录 (Whether to enable error log recording)
-      - BATCH_UPDATE_ENABLED=true  # 是否启用批量更新 (Whether to enable batch update)
+      - SESSION_SECRET=740e859f2badc3dca4dbbc4121815f0d81cab2334695b5f3766afb1718c705e9
+      - ERROR_LOG_ENABLED=true
+      - BATCH_UPDATE_ENABLED=true
     depends_on:
       - redis
       - mysql
+    networks:
+      - love-api-network
+
+  frontend:
+    image: love-api-frontend
+    container_name: love-api-frontend
+    restart: always
+    ports:
+      - "3001:80"
+    depends_on:
+      - backend
     networks:
       - love-api-network
 
@@ -40,20 +40,18 @@ services:
     image: redis:7-alpine
     container_name: love-api-redis
     restart: always
-    ports:
-      - "6379:6379"
-    command: ["redis-server", "--requirepass", "N8eXXxLcMFWXtUNS"]
+    command: ["redis-server", "--requirepass", "love-api-lovebreaker-2004"]
     networks:
       - love-api-network
 
   mysql:
-    image: mysql:8
+    image: mysql:8.0
     container_name: love-api-mysql
     restart: always
     ports:
-      - "3306:3306"
+      - "3307:3306"
     environment:
-      MYSQL_ROOT_PASSWORD: Aa1qwaszx!23?
+      MYSQL_ROOT_PASSWORD: love-api-lovebreaker-2004
       MYSQL_DATABASE: love_api
     volumes:
       - mysql_data:/var/lib/mysql
@@ -65,4 +63,4 @@ volumes:
 
 networks:
   love-api-network:
-    driver: bridge
+    external: true
