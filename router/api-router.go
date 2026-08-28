@@ -60,6 +60,8 @@ func SetApiRouter(router *gin.Engine) {
 
 		// Universal secure verification routes
 		apiRouter.POST("/verify", middleware.UserAuth(), middleware.CriticalRateLimit(), controller.UniversalVerify)
+		// 跨域图片下载代理（服务端 fetch，供历史生成图直接保存）
+		apiRouter.GET("/image/download", middleware.UserAuth(), controller.ImageDownload)
 
 		userRoute := apiRouter.Group("/user")
 		{

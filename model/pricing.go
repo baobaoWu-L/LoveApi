@@ -236,6 +236,23 @@ func updatePricing() {
 		}
 	}
 
+	// 待办4：所有聊天类模型统一支持 openai 与 anthropic 两种协议。
+	// 图像/嵌入/音频类模型没有 /v1/messages 聊天端点，仅保留 openai。
+	for model, endpoints := range modelSupportEndpointsStr {
+		n := strings.ToLower(model)
+		imageLike := strings.Contains(n, "image") || strings.Contains(n, "dall-e") ||
+			strings.Contains(n, "sora") || strings.Contains(n, "veo") ||
+			strings.Contains(n, "embed") || strings.Contains(n, "rerank") ||
+			strings.Contains(n, "whisper") || strings.Contains(n, "tts")
+		if !common.StringsContains(endpoints, "openai") {
+			endpoints = append(endpoints, "openai")
+			modelSupportEndpointsStr[model] = endpoints
+		}
+		if !imageLike && !common.StringsContains(endpoints, "anthropic") {
+			modelSupportEndpointsStr[model] = append(endpoints, "anthropic")
+		}
+	}
+
 	modelSupportEndpointTypes = make(map[string][]constant.EndpointType)
 	for model, endpoints := range modelSupportEndpointsStr {
 		supportedEndpoints := make([]constant.EndpointType, 0)

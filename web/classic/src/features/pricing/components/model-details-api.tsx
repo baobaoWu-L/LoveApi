@@ -18,7 +18,6 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { useMemo, useState } from 'react'
 import {
-  ChevronRight,
   ExternalLink,
   Gauge,
   KeyRound,
@@ -30,7 +29,6 @@ import {
 import { useTranslation } from 'react-i18next'
 import type { BundledLanguage } from 'shiki/bundle/web'
 import { cn } from '@/lib/utils'
-import { useStatus } from '@/hooks/use-status'
 import { Badge } from '@/components/ui/badge'
 import {
   Table,
@@ -429,17 +427,124 @@ function buildImageSample(lang: Lang, ctx: SampleContext): string {
   ].join('\n')
 }
 
+function buildOpenAIResponseSample(lang: Lang, ctx: SampleContext): string {
+  const url = `${ctx.baseUrl}${ctx.endpointPath}`
+  const body = JSON.stringify(
+    { model: ctx.modelName, input: 'Explain quantum entanglement in one paragraph.' },
+    null,
+    2
+  )
+  if (lang === 'curl') {
+    return [
+      `curl ${url} \\`,
+      `  -H "Authorization: Bearer $${ctx.apiKeyEnv}" \\`,
+      `  -H "Content-Type: application/json" \\`,
+      `  -d '${body.replace(/\n/g, '\n     ')}'`,
+    ].join('\n')
+  }
+  return [
+    `const response = await fetch('${url}', {`,
+    `  method: 'POST',`,
+    `  headers: {`,
+    `    'Authorization': \`Bearer \${process.env.${ctx.apiKeyEnv}}\`,`,
+    `    'Content-Type': 'application/json',`,
+    `  },`,
+    `  body: JSON.stringify(${body}),`,
+    `})`,
+    `console.log(await response.json())`,
+  ].join('\n')
+}
+
+// 从 endpointMap 取真实路径，未配置则用平台真实回退端点
+function protoPath(
+  endpointMap: Record<string, { path?: string; method?: string }>,
+  type: string,
+  fallback: string,
+  modelName: string
+): string {
+  const info = endpointMap[type] || {}
+  let p = info.path || fallback
+  if (p && p.includes('{model}')) {
+    p = replaceModelInPath(p, modelName)
+  }
+  return p
+}
+
+// 按该平台（superaiapi）每个模型真实支持的协议返回，平台系列模型不支持 anthropic。
+function resolveModelProtocols(
+  modelName: string,
+  endpointMap: Record<string, { path?: string; method?: string }>
+): { type: string; path: string }[] {
+  const n = modelName.toLowerCase()
+  const chat = {
+    type: 'openai',
+    path: protoPath(endpointMap, 'openai', '/v1/chat/completions', modelName),
+  }
+  if (n.startsWith('gemini')) {
+    return [
+      chat,
+      {
+        type: 'gemini',
+        path: protoPath(endpointMap, 'gemini', '/v1beta/models', modelName),
+      },
+    ]
+  }
+  if (n === 'gpt-5.4') {
+    return [
+      {
+        type: 'openai-response',
+        path: protoPath(endpointMap, 'openai-response', '/v1/responses', modelName),
+      },
+    ]
+  }
+  if (n === 'gpt-5.4-mini' || n === 'gpt-5.5') {
+    return [
+      {
+        type: 'openai-response',
+        path: protoPath(endpointMap, 'openai-response', '/v1/responses', modelName),
+      },
+      chat,
+    ]
+  }
+  if (n === 'gpt-image-2') {
+    return [
+      { type: 'images-edits', path: '/v1/images/edits' },
+      { type: 'image-generation', path: '/v1/images/generations' },
+    ]
+  }
+  // 其余模型（MiniMax/qwen/deepseek/kimi/glm/claude/gpt-5.6 等）统一走 OpenAI 兼容
+  return [chat]
+}
+
 function buildSample(
   lang: Lang,
   endpointType: string,
   ctx: SampleContext
 ): string {
-  if (endpointType === 'anthropic') return buildAnthropicSample(lang, ctx)
+  if (endpointType === 'ccswitch') return buildCcSwitchSample(ctx)
+  if (endpointType === 'openai-response') return buildOpenAIResponseSample(lang, ctx)
   if (endpointType === 'gemini') return buildGeminiSample(lang, ctx)
   if (endpointType === 'embeddings' || endpointType === 'jina-rerank')
     return buildEmbeddingSample(lang, ctx)
-  if (endpointType === 'image-generation') return buildImageSample(lang, ctx)
+  if (endpointType === 'image-generation' || endpointType === 'images-edits')
+    return buildImageSample(lang, ctx)
+  if (endpointType === 'anthropic') return buildAnthropicSample(lang, ctx) // 兼容保留，不作为可用协议展示
   return buildChatSample(lang, ctx)
+}
+
+// cc-switch 供应商配置（开源切换器）：本质是切换不同供应商配置。
+// 切换供应商时会把该配置写入要生效的 CLI 配置文件（Claude Code / Codex 等）。
+// api = 本项目端点地址；key = 本项目接口密钥；model = 当前模型；remark 说明连接自己的后台。
+function buildCcSwitchSample(ctx: SampleContext): string {
+  return [
+    '{',
+    `  "name": "LoveApi-${ctx.modelName}",`,
+    `  "api": "${ctx.baseUrl}",`,
+    `  "key": "<YOUR_API_KEY>",`,
+    `  "model": "${ctx.modelName}",`,
+    `  "remark": "连接自己的后台 (LoveApi)，切换后写入 Claude Code / Codex 等配置文件"`,
+    '}',
+  ].join('\n')
 }
 
 // ---------------------------------------------------------------------------
@@ -451,33 +556,17 @@ function CodeSamplesSection(props: {
   endpointMap: Record<string, { path?: string; method?: string }>
 }) {
   const { t } = useTranslation()
-  const { status } = useStatus()
 
-  const baseUrl = useMemo(() => {
-    const candidate =
-      (status as Record<string, unknown> | null)?.server_address ??
-      (status as Record<string, unknown> | null)?.serverAddress ??
-      (status?.data as Record<string, unknown> | undefined)?.server_address ??
-      (status?.data as Record<string, unknown> | undefined)?.serverAddress
-    if (candidate && typeof candidate === 'string') {
-      return candidate.replace(/\/$/, '')
-    }
-    if (typeof window !== 'undefined') return window.location.origin
-    return 'https://api.example.com'
-  }, [status])
+  // 中转站对外地址：所有代码示例都指向这个真实可接入的地址
+  const baseUrl = 'https://api.LoveFulfiller.cn'
 
   const endpoints = useMemo(() => {
-    const types = props.model.supported_endpoint_types || []
-    return types
-      .map((type) => {
-        const info = props.endpointMap[type] || {}
-        let path = info.path || ''
-        if (path && path.includes('{model}')) {
-          path = replaceModelInPath(path, props.model.model_name || '')
-        }
-        return { type, path, method: info.method || 'POST' }
-      })
-      .filter((e) => Boolean(e.path))
+    // 按该平台每个模型真实支持的协议展示（不含 anthropic），并附 ccswitch 接入项
+    const protocols = resolveModelProtocols(
+      props.model.model_name || '',
+      props.endpointMap
+    )
+    return [...protocols, { type: 'ccswitch', path: '' }]
   }, [props.model, props.endpointMap])
 
   const [endpointType, setEndpointType] = useState<string>(
@@ -672,7 +761,18 @@ function RateLimitsSection(props: { model: PricingModel }) {
   const { t } = useTranslation()
   const limits = useMemo(() => buildRateLimits(props.model), [props.model])
 
-  if (limits.length === 0) return null
+  if (limits.length === 0) {
+    return (
+      <section>
+        <SectionTitle icon={Gauge}>{t('Rate limits')}</SectionTitle>
+        <div className='border-border/60 bg-muted/20 rounded-lg border p-3 text-xs leading-relaxed text-muted-foreground'>
+          {t(
+            'No per-model rate limits configured. Requests are currently unlimited; limits can be set per API Key on the Tokens page.'
+          )}
+        </div>
+      </section>
+    )
+  }
 
   return (
     <section>
@@ -820,31 +920,45 @@ function InfoCell(props: { label: string; children: React.ReactNode }) {
 // Authentication preview
 // ---------------------------------------------------------------------------
 
-function AuthSection() {
+function AuthSection(props: { model: PricingModel }) {
   const { t } = useTranslation()
+  const types = props.model.supported_endpoint_types ?? []
+  const hasOpenAI =
+    types.includes('openai') ||
+    (!types.includes('anthropic') && !types.includes('gemini'))
+  const hasAnthropic = types.includes('anthropic')
+  const hasGemini = types.includes('gemini')
+
+  const rows: { label: string; code: string }[] = []
+  if (hasOpenAI)
+    rows.push({
+      label: t('OpenAI / compatible'),
+      code: 'Authorization: Bearer <TOKEN>',
+    })
+  if (hasAnthropic)
+    rows.push({ label: t('Anthropic'), code: 'x-api-key: <TOKEN>' })
+  if (hasGemini)
+    rows.push({ label: t('Gemini'), code: 'x-goog-api-key: <API_KEY>' })
+
   return (
     <section>
       <SectionTitle icon={KeyRound}>{t('Authentication')}</SectionTitle>
-      <div className='border-border/60 bg-muted/20 flex items-start gap-2 rounded-lg border p-3'>
-        <ChevronRight className='text-muted-foreground mt-0.5 size-3.5 shrink-0' />
-        <div className='space-y-1.5 text-xs leading-relaxed'>
-          <p>
-            {t('All requests must include')}{' '}
-            <code className='bg-muted rounded px-1 py-0.5 font-mono text-[11px]'>
-              Authorization: Bearer &lt;TOKEN&gt;
-            </code>{' '}
-            {t('header. Anthropic-formatted endpoints accept the')}{' '}
-            <code className='bg-muted rounded px-1 py-0.5 font-mono text-[11px]'>
-              x-api-key
-            </code>{' '}
-            {t('header instead.')}
-          </p>
-          <p className='text-muted-foreground'>
-            {t(
-              'Generate tokens from the Tokens page; you can scope them to specific models, groups, IPs, and rate-limits.'
-            )}
-          </p>
-        </div>
+      <div className='border-border/60 bg-muted/20 rounded-lg border p-3'>
+        {rows.map((row) => (
+          <div key={row.label} className='mb-2.5 last:mb-0'>
+            <span className='text-muted-foreground text-[10px] font-medium tracking-wider uppercase'>
+              {row.label}
+            </span>
+            <code className='bg-muted mt-1 block rounded px-1.5 py-0.5 font-mono text-[11px]'>
+              {row.code}
+            </code>
+          </div>
+        ))}
+        <p className='text-muted-foreground mt-2.5 text-xs'>
+          {t(
+            'Generate tokens from the Tokens page; you can scope them to specific models, groups, IPs, and rate-limits.'
+          )}
+        </p>
       </div>
     </section>
   )
@@ -861,7 +975,7 @@ export function ModelDetailsApi(props: {
   return (
     <div className='space-y-6'>
       <CodeSamplesSection model={props.model} endpointMap={props.endpointMap} />
-      <AuthSection />
+      <AuthSection model={props.model} />
       <SupportedParametersSection model={props.model} />
       <RateLimitsSection model={props.model} />
     </div>
@@ -874,14 +988,11 @@ export function ModelDetailsApi(props: {
 
 function SectionTitle(props: {
   children: React.ReactNode
-  icon: React.ComponentType<{ className?: string }>
+  icon?: React.ComponentType<{ className?: string }>
 }) {
-  const Icon = props.icon
+  // 按需求去掉 AI 风格图标，只保留纯文字标题
   return (
-    <h3 className='text-foreground mb-3 flex items-center gap-1.5 text-sm font-semibold'>
-      <Icon className='text-muted-foreground/70 size-3.5' />
-      {props.children}
-    </h3>
+    <h3 className='text-foreground mb-3 text-sm font-semibold'>{props.children}</h3>
   )
 }
 

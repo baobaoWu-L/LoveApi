@@ -18,7 +18,6 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { useRef, useEffect, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useReducedMotion } from 'motion/react'
 
 interface CounterProps {
   end: number

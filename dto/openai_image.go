@@ -151,6 +151,17 @@ func (i *ImageRequest) GetTokenCountMeta() *types.TokenCountMeta {
 		}
 	}
 
+	// gpt-image 按次计费：根据分辨率档位调整价格倍率（前端 extra_fields 传 resolution_tier）
+	// 2K 默认按次 $0.07；4K 按次 $0.30，倍率 = 0.30 / 0.07
+	if strings.HasPrefix(i.Model, "gpt-image") {
+		if tierRaw, ok := i.Extra["resolution_tier"]; ok {
+			var tier string
+			if err := common.Unmarshal(tierRaw, &tier); err == nil && tier == "4k" {
+				sizeRatio = 0.30 / 0.07
+			}
+		}
+	}
+
 	// n is NOT included here; it is handled via OtherRatio("n") in
 	// image_handler.go (default) or channel adaptors (actual count).
 	// Including n here caused double-counting for channels that also

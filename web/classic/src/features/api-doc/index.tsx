@@ -17,7 +17,6 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { useState, useEffect, useMemo } from 'react'
-import { useTranslation } from 'react-i18next'
 import { CopyButton } from '@/components/copy-button'
 import { Badge } from '@/components/ui/badge'
 import { Card } from '@/components/ui/card'
@@ -25,7 +24,6 @@ import { Input } from '@/components/ui/input'
 import { PublicLayout } from '@/components/layout'
 import { PastelBackdrop } from '@/components/pastel-backdrop'
 import { GsapReveal } from '@/components/gsap-reveal'
-import { useStatus } from '@/hooks/use-status'
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard'
 import { cn } from '@/lib/utils'
 import { ChevronDown, ChevronRight, Copy, Search, List } from 'lucide-react'
@@ -147,8 +145,8 @@ function CodeBlock({ code, lang = 'json' }: { code: string; lang?: string }) {
           复制
         </button>
       </div>
-      <pre className='bg-[#1e1e2e] overflow-x-auto p-4'>
-        <code className='text-[#cdd6f4] font-mono text-sm leading-relaxed whitespace-pre'>
+      <pre className='bg-muted/40 overflow-x-auto rounded-md border p-4'>
+        <code className='text-foreground font-mono text-sm leading-relaxed whitespace-pre'>
           {code}
         </code>
       </pre>
@@ -160,12 +158,11 @@ function CodeBlock({ code, lang = 'json' }: { code: string; lang?: string }) {
 
 function Section({
   id,
-  icon,
   title,
   children,
 }: {
   id: SectionId
-  icon: string
+  icon?: string
   title: string
   children: React.ReactNode
 }) {
@@ -176,7 +173,6 @@ function Section({
       className='scroll-mt-28 space-y-4 border-b border-border/40 py-10 last:border-0'
     >
       <h2 className='flex items-center gap-2 text-2xl font-semibold tracking-tight'>
-        <span className='text-xl'>{icon}</span>
         {title}
       </h2>
       {children}
@@ -244,15 +240,12 @@ function EndpointCard({
 // ===== 主页面 =====
 
 export function ApiDoc() {
-  const { t } = useTranslation()
-  const { status } = useStatus()
   const [query, setQuery] = useState('')
   const [mobileOpen, setMobileOpen] = useState(false)
   const active = useActiveSection(SECTION_IDS)
 
-  const serverAddress =
-    (status?.server_address as string) ||
-    (typeof window !== 'undefined' ? window.location.origin : '')
+  // 中转站对外地址：文档中的所有配置示例都指向这个真实可接入的地址
+  const serverAddress = 'https://api.LoveFulfiller.cn'
 
   const filteredGroups = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -293,7 +286,6 @@ export function ApiDoc() {
                     active === item.id && 'text-foreground bg-muted/50 font-medium'
                   )}
                 >
-                  <span className='text-xs'>{item.icon}</span>
                   {item.label}
                 </a>
               ))}
@@ -343,7 +335,6 @@ export function ApiDoc() {
                                     'text-foreground bg-muted/70 font-medium'
                                 )}
                               >
-                                <span className='text-xs'>{item.icon}</span>
                                 {item.label}
                               </a>
                             </li>
@@ -418,7 +409,7 @@ export function ApiDoc() {
                             {serverAddress}
                           </code>
                         </div>
-                        <CopyButton text={serverAddress} />
+                        <CopyButton value={serverAddress} />
                       </div>
                     </Card>
                     <div className='bg-muted/50 border-border/50 flex items-start gap-3 rounded-lg p-4 text-sm'>
@@ -445,7 +436,9 @@ export function ApiDoc() {
                       中配置 Love Api 作为 Codex CLI 的模型提供方：
                     </p>
                     <CodeBlock
-                      code={`model = "gpt-4o"
+                      code={`# 切换模型无需改此文件：直接在 Codex 桌面端选择，选中哪个就用哪个（不会自动路由到其它模型）
+# 下面 model 仅为默认值
+model = "gpt-5.6-sol"
 model_provider = "loveapi"
 
 [model_providers.loveapi]
@@ -455,6 +448,18 @@ env_key = "LOVEAPI_API_KEY"
 wire_api = "chat"`}
                       lang='toml'
                     />
+                    <div className='rounded-lg border border-amber-200/70 bg-amber-50/70 p-3 text-xs leading-relaxed text-amber-700 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-300'>
+                      <strong>模型切换：</strong>
+                      直接在你的 Codex 桌面端切换模型即可，选中哪个就用哪个，**无需修改此文件**。
+                      Codex 默认会在多个模型间自动切换（例如有的任务会去调用
+                      <code className='bg-muted mx-1 rounded px-1'>gpt-5.6-terra</code>
+                      等）；要「选哪个模型、就用哪个模型」，只需保持上面
+                      <em>只有一个</em>
+                      <code className='bg-muted mx-1 rounded px-1'>model</code>
+                      和
+                      <code className='bg-muted mx-1 rounded px-1'>model_provider</code>
+                      （不添加其它模型/模型提供方），Codex 就会只使用你选定的模型。
+                    </div>
                     <div className='bg-muted/50 rounded-lg p-3 text-xs text-muted-foreground'>
                       然后在环境变量中设置对应的密钥：
                       <CodeBlock
@@ -604,9 +609,14 @@ print(resp.choices[0].message.content)`}
                       <code className='bg-muted rounded px-1 text-xs'>/v1</code>）：
                     </p>
                     <CodeBlock
-                      code={`ccswitch://v1/import?resource=provider&app=codex&name=LoveApi&endpoint=${serverAddress}/v1&apiKey=sk-your-loveapi-key&model=gpt-4o&homepage=${serverAddress}&enabled=true`}
+                      code={`ccswitch://v1/import?resource=provider&app=codex&name=LoveApi&endpoint=${serverAddress}/v1&apiKey=sk-your-loveapi-key&model=gpt-5.6-sol&homepage=${serverAddress}&enabled=true`}
                       lang='text'
                     />
+                    <p className='text-muted-foreground text-xs leading-relaxed'>
+                      切换模型直接在 Codex / Claude 桌面端选择即可，无需改此文件；这里的
+                      <code className='bg-muted mx-1 rounded px-1'>model</code>
+                      仅为导入时的默认值（也可省略）。
+                    </p>
                     <div className='overflow-hidden rounded-lg border'>
                       <table className='w-full text-sm'>
                         <thead>

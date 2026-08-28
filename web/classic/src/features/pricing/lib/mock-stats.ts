@@ -763,6 +763,140 @@ const VIDEO_PARAMS: SupportedParameter[] = [
   },
 ]
 
+// 以下参数集按各协议官方规范生成（非随机 mock）。
+// 模型支持的协议类型（supported_endpoint_types）决定展示哪一套。
+
+const ANTHROPIC_PARAMS: SupportedParameter[] = [
+  {
+    name: 'model',
+    type: 'string',
+    required: true,
+    descriptionKey: 'Anthropic model identifier',
+  },
+  {
+    name: 'max_tokens',
+    type: 'integer',
+    required: true,
+    descriptionKey: 'Maximum tokens to generate, including thinking tokens',
+  },
+  {
+    name: 'messages',
+    type: 'array',
+    required: true,
+    descriptionKey: 'Conversation messages (user/assistant)',
+  },
+  {
+    name: 'system',
+    type: 'string',
+    descriptionKey: 'System prompt',
+  },
+  {
+    name: 'temperature',
+    type: 'number',
+    defaultValue: 1,
+    range: '0 ~ 1',
+    descriptionKey: 'Sampling temperature',
+  },
+  {
+    name: 'top_p',
+    type: 'number',
+    defaultValue: 1,
+    range: '0 ~ 1',
+    descriptionKey: 'Nucleus sampling probability',
+  },
+  {
+    name: 'top_k',
+    type: 'integer',
+    descriptionKey: 'Only sample from the top K options',
+  },
+  {
+    name: 'stop_sequences',
+    type: 'array',
+    descriptionKey: 'Up to 4 strings that stop generation',
+  },
+  {
+    name: 'stream',
+    type: 'boolean',
+    defaultValue: false,
+    descriptionKey: 'Stream tokens via Server-Sent Events',
+  },
+  {
+    name: 'tools',
+    type: 'array',
+    descriptionKey: 'Tool definitions the model may use',
+  },
+  {
+    name: 'tool_choice',
+    type: 'string',
+    enumValues: ['auto', 'any', 'tool'],
+    descriptionKey: 'Tool-choice policy',
+  },
+  {
+    name: 'metadata',
+    type: 'object',
+    descriptionKey: 'Structured metadata (user_id, etc.)',
+  },
+]
+
+const GEMINI_PARAMS: SupportedParameter[] = [
+  {
+    name: 'model',
+    type: 'string',
+    required: true,
+    descriptionKey: 'Gemini model identifier',
+  },
+  {
+    name: 'contents',
+    type: 'array',
+    required: true,
+    descriptionKey: 'Conversation content parts',
+  },
+  {
+    name: 'systemInstruction',
+    type: 'object',
+    descriptionKey: 'System instruction for the model',
+  },
+  {
+    name: 'generationConfig.temperature',
+    type: 'number',
+    defaultValue: 1,
+    range: '0 ~ 2',
+    descriptionKey: 'Sampling temperature',
+  },
+  {
+    name: 'generationConfig.topP',
+    type: 'number',
+    defaultValue: 0.95,
+    range: '0 ~ 1',
+    descriptionKey: 'Top-p sampling',
+  },
+  {
+    name: 'generationConfig.topK',
+    type: 'integer',
+    descriptionKey: 'Top-k sampling',
+  },
+  {
+    name: 'generationConfig.maxOutputTokens',
+    type: 'integer',
+    descriptionKey: 'Maximum output tokens',
+  },
+  {
+    name: 'generationConfig.stopSequences',
+    type: 'array',
+    descriptionKey: 'Stop sequences',
+  },
+  {
+    name: 'tools',
+    type: 'array',
+    descriptionKey: 'Function declarations the model may call',
+  },
+  {
+    name: 'safetySettings',
+    type: 'array',
+    descriptionKey: 'Content safety categories',
+  },
+]
+
 type ApiCategory = 'reasoning' | 'embedding' | 'image' | 'video' | 'chat'
 
 /**
@@ -791,11 +925,21 @@ export function buildSupportedParameters(
   model: PricingModel
 ): SupportedParameter[] {
   const cat = apiCategoryOf(model)
-  if (cat === 'reasoning') return REASONING_PARAMS
   if (cat === 'embedding') return EMBEDDING_PARAMS
   if (cat === 'image') return IMAGE_PARAMS
   if (cat === 'video') return VIDEO_PARAMS
-  return COMMON_CHAT_PARAMS
+
+  // 按模型支持的主导协议生成参数（openai 优先，其次 anthropic / gemini）
+  const types = model.supported_endpoint_types ?? []
+  const hasOpenAI = types.includes('openai')
+  const hasAnthropic = types.includes('anthropic')
+  const hasGemini = types.includes('gemini')
+
+  if (hasAnthropic && !hasOpenAI) return ANTHROPIC_PARAMS
+  if (hasGemini && !hasOpenAI && !hasAnthropic) return GEMINI_PARAMS
+  return cat === 'reasoning'
+    ? [...COMMON_CHAT_PARAMS, ...REASONING_PARAMS]
+    : COMMON_CHAT_PARAMS
 }
 
 export type RateLimit = {
@@ -806,30 +950,16 @@ export type RateLimit = {
 }
 
 /** Build per-group RPM / TPM / RPD limits for the model. */
-export function buildRateLimits(model: PricingModel): RateLimit[] {
-  const groups = (model.enable_groups ?? []).filter((g) => g && g !== 'auto')
-  const targets = groups.length > 0 ? groups : ['default']
-  const cat = apiCategoryOf(model)
-  const baseSeed = hashStringToSeed(`${model.model_name}:rl`)
-  const isHeavy = cat === 'image' || cat === 'video'
-  const isLight = cat === 'embedding'
-  const baseRpm = isHeavy ? 60 : isLight ? 5_000 : 500
-  const baseTpm = isHeavy ? 0 : isLight ? 1_000_000 : 200_000
-  const baseRpd = isHeavy ? 1_000 : isLight ? 100_000 : 10_000
-
-  return targets
-    .slice()
-    .sort((a, b) => a.localeCompare(b))
-    .map((group) => {
-      const rand = seededRandom(baseSeed ^ hashStringToSeed(group))
-      const tier = 0.6 + rand() * 1.4
-      return {
-        group,
-        rpm: Math.round((baseRpm * tier) / 10) * 10,
-        tpm: baseTpm === 0 ? 0 : Math.round((baseTpm * tier) / 1_000) * 1_000,
-        rpd: Math.round((baseRpd * tier) / 100) * 100,
-      }
-    })
+/**
+ * Build per-group rate limits for the model.
+ *
+ * The backend does not currently expose per-model, per-group RPM / TPM / RPD
+ * configuration — rate limits live on the token / user level (middleware).
+ * Until a real source exists, we intentionally return an empty list so the UI
+ * shows "未配置即不限" instead of fabricating numbers.
+ */
+export function buildRateLimits(_model: PricingModel): RateLimit[] {
+  return []
 }
 
 /** Format an integer rate-limit value compactly. */

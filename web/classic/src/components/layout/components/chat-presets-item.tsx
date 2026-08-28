@@ -71,6 +71,7 @@ function ChatMenuItem({
       <SidebarMenuSubItem>
         <SidebarMenuSubButton
           isActive={active}
+          className='h-auto min-h-7'
           render={
             <Link
               to='/chat/$chatId'
@@ -79,7 +80,12 @@ function ChatMenuItem({
             />
           }
         >
-          <span>{preset.name}</span>
+          <span
+            className='min-w-0 leading-snug'
+            style={{ overflow: 'visible', whiteSpace: 'normal' }}
+          >
+            {preset.name}
+          </span>
         </SidebarMenuSubButton>
       </SidebarMenuSubItem>
     )
@@ -93,13 +99,18 @@ function ChatMenuItem({
         }}
         aria-disabled={loading ? 'true' : undefined}
         isActive={false}
-        className='justify-between'
+        className='h-auto min-h-7 justify-between'
       >
-        <span>{preset.name}</span>
+        <span
+          className='min-w-0 flex-1 leading-snug'
+          style={{ overflow: 'visible', whiteSpace: 'normal' }}
+        >
+          {preset.name}
+        </span>
         {loading ? (
-          <Loader2 className='h-4 w-4 animate-spin' />
+          <Loader2 className='h-4 w-4 shrink-0 animate-spin' />
         ) : (
-          <ExternalLink className='h-4 w-4' />
+          <ExternalLink className='h-4 w-4 shrink-0' />
         )}
       </SidebarMenuSubButton>
     </SidebarMenuSubItem>
