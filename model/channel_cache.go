@@ -32,7 +32,9 @@ func InitChannelCache() {
 	DB.Find(&abilities)
 	groups := make(map[string]bool)
 	for _, ability := range abilities {
-		groups[ability.Group] = true
+		if group := strings.TrimSpace(ability.Group); group != "" {
+			groups[group] = true
+		}
 	}
 	newGroup2model2channels := make(map[string]map[string][]int)
 	for group := range groups {
@@ -44,8 +46,19 @@ func InitChannelCache() {
 		}
 		groups := strings.Split(channel.Group, ",")
 		for _, group := range groups {
+			group = strings.TrimSpace(group)
+			if group == "" {
+				continue
+			}
+			if _, ok := newGroup2model2channels[group]; !ok {
+				newGroup2model2channels[group] = make(map[string][]int)
+			}
 			models := strings.Split(channel.Models, ",")
 			for _, model := range models {
+				model = strings.TrimSpace(model)
+				if model == "" {
+					continue
+				}
 				if _, ok := newGroup2model2channels[group][model]; !ok {
 					newGroup2model2channels[group][model] = make([]int, 0)
 				}
@@ -94,28 +107,30 @@ func SyncChannelCache(frequency int) {
 }
 
 func GetRandomSatisfiedChannel(group string, model string, retry int) (*Channel, error) {
+	return GetRandomSatisfiedChannelWithExclusions(group, model, retry, nil)
+}
+
+// GetRandomSatisfiedChannelWithExclusions selects an enabled cached channel
+// while excluding channels already attempted by the current request.
+func GetRandomSatisfiedChannelWithExclusions(group string, model string, retry int, excluded map[int]struct{}) (*Channel, error) {
 	// if memory cache is disabled, get channel directly from database
 	if !common.MemoryCacheEnabled {
-		return GetChannel(group, model, retry)
+		return GetChannelWithExclusions(group, model, retry, excluded)
 	}
 
 	channelSyncLock.RLock()
 	defer channelSyncLock.RUnlock()
 
-	// First, try to find channels with the exact model name.
-	channels := group2model2channels[group][model]
-
-	// If no channels found, try to find channels with the normalized model name.
-	if len(channels) == 0 {
-		normalizedModel := ratio_setting.FormatMatchingModelName(model)
-		channels = group2model2channels[group][normalizedModel]
-	}
+	channels := getCachedChannels(group, model)
 
 	if len(channels) == 0 {
 		return nil, nil
 	}
 
 	if len(channels) == 1 {
+		if _, skip := excluded[channels[0]]; skip {
+			return nil, nil
+		}
 		if channel, ok := channelsIDM[channels[0]]; ok {
 			return channel, nil
 		}
@@ -125,10 +140,16 @@ func GetRandomSatisfiedChannel(group string, model string, retry int) (*Channel,
 	uniquePriorities := make(map[int]bool)
 	for _, channelId := range channels {
 		if channel, ok := channelsIDM[channelId]; ok {
+			if _, skip := excluded[channelId]; skip {
+				continue
+			}
 			uniquePriorities[int(channel.GetPriority())] = true
 		} else {
 			return nil, fmt.Errorf("数据库一致性错误，渠道# %d 不存在，请联系管理员修复", channelId)
 		}
+	}
+	if len(uniquePriorities) == 0 {
+		return nil, nil
 	}
 	var sortedUniquePriorities []int
 	for priority := range uniquePriorities {
@@ -146,6 +167,9 @@ func GetRandomSatisfiedChannel(group string, model string, retry int) (*Channel,
 	var targetChannels []*Channel
 	for _, channelId := range channels {
 		if channel, ok := channelsIDM[channelId]; ok {
+			if _, skip := excluded[channelId]; skip {
+				continue
+			}
 			if channel.GetPriority() == targetPriority {
 				sumWeight += channel.GetWeight()
 				targetChannels = append(targetChannels, channel)
@@ -188,6 +212,50 @@ func GetRandomSatisfiedChannel(group string, model string, retry int) (*Channel,
 	}
 	// return null if no channel is not found
 	return nil, errors.New("channel not found")
+}
+
+// getCachedChannels resolves model names defensively. Channel configuration is
+// user-editable and may contain surrounding whitespace or case-only aliases;
+// requests must still be able to reach an enabled channel in that case.
+func getCachedChannels(group, model string) []int {
+	group = strings.TrimSpace(group)
+	model = strings.TrimSpace(model)
+	modelMap := group2model2channels[group]
+	if len(modelMap) == 0 {
+		for cachedGroup, candidate := range group2model2channels {
+			if strings.EqualFold(strings.TrimSpace(cachedGroup), group) {
+				modelMap = candidate
+				break
+			}
+		}
+	}
+	if len(modelMap) == 0 {
+		return nil
+	}
+	// Prefer an exact key, then the configured matching-model alias.
+	keys := []string{model}
+	if normalized := strings.TrimSpace(ratio_setting.FormatMatchingModelName(model)); normalized != "" && normalized != model {
+		keys = append(keys, normalized)
+	}
+	seen := make(map[int]struct{})
+	result := make([]int, 0)
+	for _, key := range keys {
+		for id, ids := range modelMap {
+			if id != key && !strings.EqualFold(strings.TrimSpace(id), key) {
+				continue
+			}
+			for _, channelID := range ids {
+				if _, ok := seen[channelID]; !ok {
+					seen[channelID] = struct{}{}
+					result = append(result, channelID)
+				}
+			}
+		}
+		if len(result) > 0 {
+			break
+		}
+	}
+	return result
 }
 
 func CacheGetChannel(id int) (*Channel, error) {

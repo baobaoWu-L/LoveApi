@@ -24,6 +24,8 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Input } from '@/components/ui/input'
+import { Button } from '@/components/ui/button'
 import { ConfirmDialog } from '@/components/confirm-dialog'
 import { resetModelRatios } from '../api'
 import { SettingsSection } from '../components/settings-section'
@@ -200,7 +202,7 @@ type GroupFormValues = z.infer<typeof groupSchema>
 type RatioTabId = 'models' | 'groups' | 'tool-prices' | 'upstream-sync'
 
 type RatioSettingsCardProps = {
-  modelDefaults: ModelFormValues
+  modelDefaults: ModelFormValues & { ModelPriceMarkupFactor?: string }
   groupDefaults: GroupFormValues
   toolPricesDefault: string
   titleKey?: string
@@ -220,6 +222,23 @@ export function RatioSettingsCard({
   const updateOption = useUpdateOption()
   const queryClient = useQueryClient()
   const [confirmOpen, setConfirmOpen] = useState(false)
+  // 加价系数：同步上游价格时在上游美元价基础上乘以该倍率（后端：ModelPriceMarkupFactor）
+  const [markupFactor, setMarkupFactor] = useState(
+    modelDefaults.ModelPriceMarkupFactor || '1.25'
+  )
+
+  const saveMarkupFactor = useCallback(async () => {
+    const raw = markupFactor.trim()
+    const num = Number(raw)
+    if (!raw || !Number.isFinite(num) || num <= 0) {
+      toast.error(t('Markup factor must be a positive number'))
+      return
+    }
+    await updateOption.mutateAsync({
+      key: 'ModelPriceMarkupFactor',
+      value: String(num),
+    })
+  }, [markupFactor, updateOption, t])
 
   const resetMutation = useMutation({
     mutationFn: resetModelRatios,
@@ -498,6 +517,38 @@ export function RatioSettingsCard({
 
   return (
     <SettingsSection title={t(titleKey)} description={t(descriptionKey)}>
+      <div className='mb-4 rounded-lg border p-3'>
+        <div className='mb-2 flex items-center justify-between gap-3'>
+          <div>
+            <div className='text-sm font-medium'>
+              {t('Upstream price markup factor')}
+            </div>
+            <p className='text-muted-foreground text-xs'>
+              {t(
+                'Multiply upstream USD price by this factor when syncing upstream prices. e.g. 1.25 = +25%.'
+              )}
+            </p>
+          </div>
+          <div className='flex items-center gap-2'>
+            <Input
+              type='number'
+              step='0.01'
+              min='0'
+              className='w-28'
+              value={markupFactor}
+              onChange={(e) => setMarkupFactor(e.target.value)}
+            />
+            <Button
+              size='sm'
+              onClick={saveMarkupFactor}
+              disabled={updateOption.isPending}
+            >
+              {t('Save')}
+            </Button>
+          </div>
+        </div>
+      </div>
+
       {visibleTabs.length === 1 ? (
         renderTabContent(defaultTab)
       ) : (

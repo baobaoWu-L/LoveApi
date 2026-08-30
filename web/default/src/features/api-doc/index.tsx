@@ -594,6 +594,42 @@ export function ApiDoc() {
               )}
             />
           </EndpointCard>
+
+          <EndpointCard
+            method='POST'
+            path='/v1/videos'
+            desc='视频生成（OpenAI 视频格式）'
+          >
+            <h4 className='mb-2 text-xs font-semibold uppercase text-muted-foreground'>
+              请求示例
+            </h4>
+            <CodeBlock
+              code={JSON.stringify(
+                {
+                  model: 'grok-imagine-video',
+                  prompt: 'A cinematic sunset over the ocean',
+                  seconds: '5',
+                  size: '1280x720',
+                },
+                null,
+                2
+              )}
+            />
+            <p className='text-muted-foreground mt-3 text-xs'>
+              返回任务 ID 后，使用 GET /v1/videos/{'{task_id}'} 查询状态；完成后可访问 /v1/videos/{'{task_id}'}/content 下载视频。
+            </p>
+          </EndpointCard>
+
+          <EndpointCard
+            method='GET'
+            path='/v1/videos/{task_id}'
+            desc='查询视频生成任务'
+          >
+            <CodeBlock
+              code={`curl ${serverAddress}/v1/videos/video_task_id \\\n+  -H "Authorization: Bearer <your-loveapi-key>"`}
+              lang='bash'
+            />
+          </EndpointCard>
         </Section>
 
         {/* 5. 代码示例 */}

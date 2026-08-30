@@ -9,10 +9,12 @@ import (
 )
 
 const (
-	BillingModeRatio      = "ratio"
-	BillingModeTieredExpr = "tiered_expr"
-	BillingModeField      = "billing_mode"
-	BillingExprField      = "billing_expr"
+	BillingModeRatio        = "ratio"
+	BillingModeTieredExpr   = "tiered_expr"
+	BillingModeField        = "billing_mode"
+	BillingExprField        = "billing_expr"
+	BillingModeByGroupField = "billing_mode_by_group"
+	BillingExprByGroupField = "billing_expr_by_group"
 )
 
 // BillingSetting is managed by config.GlobalConfig.Register.
@@ -20,11 +22,16 @@ const (
 type BillingSetting struct {
 	BillingMode map[string]string `json:"billing_mode"`
 	BillingExpr map[string]string `json:"billing_expr"`
+	// Optional per-group overrides. The inner key is the exact user group name.
+	BillingModeByGroup map[string]map[string]string `json:"billing_mode_by_group"`
+	BillingExprByGroup map[string]map[string]string `json:"billing_expr_by_group"`
 }
 
 var billingSetting = BillingSetting{
-	BillingMode: make(map[string]string),
-	BillingExpr: make(map[string]string),
+	BillingMode:        make(map[string]string),
+	BillingExpr:        make(map[string]string),
+	BillingModeByGroup: make(map[string]map[string]string),
+	BillingExprByGroup: make(map[string]map[string]string),
 }
 
 func init() {
@@ -47,6 +54,28 @@ func GetBillingExpr(model string) (string, bool) {
 	return expr, ok
 }
 
+// GetBillingModeForGroup returns a group-specific mode when configured and
+// falls back to the model-wide mode for backwards compatibility.
+func GetBillingModeForGroup(model, group string) string {
+	if groups, ok := billingSetting.BillingModeByGroup[model]; ok {
+		if mode, ok := groups[group]; ok && mode != "" {
+			return mode
+		}
+	}
+	return GetBillingMode(model)
+}
+
+// GetBillingExprForGroup returns a group-specific expression when configured
+// and falls back to the model-wide expression for backwards compatibility.
+func GetBillingExprForGroup(model, group string) (string, bool) {
+	if groups, ok := billingSetting.BillingExprByGroup[model]; ok {
+		if expr, ok := groups[group]; ok && expr != "" {
+			return expr, true
+		}
+	}
+	return GetBillingExpr(model)
+}
+
 func GetBillingModeCopy() map[string]string {
 	return lo.Assign(billingSetting.BillingMode)
 }
@@ -55,13 +84,35 @@ func GetBillingExprCopy() map[string]string {
 	return lo.Assign(billingSetting.BillingExpr)
 }
 
+func GetBillingModeByGroupCopy() map[string]map[string]string {
+	result := make(map[string]map[string]string, len(billingSetting.BillingModeByGroup))
+	for model, groups := range billingSetting.BillingModeByGroup {
+		result[model] = lo.Assign(groups)
+	}
+	return result
+}
+
+func GetBillingExprByGroupCopy() map[string]map[string]string {
+	result := make(map[string]map[string]string, len(billingSetting.BillingExprByGroup))
+	for model, groups := range billingSetting.BillingExprByGroup {
+		result[model] = lo.Assign(groups)
+	}
+	return result
+}
+
 func GetPricingSyncData(base map[string]any) map[string]any {
-	extra := make(map[string]any, 2)
+	extra := make(map[string]any, 4)
 	if modes := GetBillingModeCopy(); len(modes) > 0 {
 		extra[BillingModeField] = modes
 	}
 	if exprs := GetBillingExprCopy(); len(exprs) > 0 {
 		extra[BillingExprField] = exprs
+	}
+	if modes := GetBillingModeByGroupCopy(); len(modes) > 0 {
+		extra[BillingModeByGroupField] = modes
+	}
+	if exprs := GetBillingExprByGroupCopy(); len(exprs) > 0 {
+		extra[BillingExprByGroupField] = exprs
 	}
 	return lo.Assign(base, extra)
 }

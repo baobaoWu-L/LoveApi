@@ -1,6 +1,8 @@
 package model
 
 import (
+	"strings"
+
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/setting/ratio_setting"
 )
@@ -20,12 +22,8 @@ func IsChannelEnabledForGroupModel(group string, modelName string, channelID int
 		return false
 	}
 
-	if isChannelIDInList(group2model2channels[group][modelName], channelID) {
+	if isChannelIDInList(getCachedChannels(group, modelName), channelID) {
 		return true
-	}
-	normalized := ratio_setting.FormatMatchingModelName(modelName)
-	if normalized != "" && normalized != modelName {
-		return isChannelIDInList(group2model2channels[group][normalized], channelID)
 	}
 	return false
 }
@@ -43,6 +41,8 @@ func IsChannelEnabledForAnyGroupModel(groups []string, modelName string, channel
 }
 
 func isChannelEnabledForGroupModelDB(group string, modelName string, channelID int) bool {
+	group = strings.TrimSpace(group)
+	modelName = strings.TrimSpace(modelName)
 	var count int64
 	err := DB.Model(&Ability{}).
 		Where(commonGroupCol+" = ? and model = ? and channel_id = ? and enabled = ?", group, modelName, channelID, true).
@@ -50,15 +50,25 @@ func isChannelEnabledForGroupModelDB(group string, modelName string, channelID i
 	if err == nil && count > 0 {
 		return true
 	}
-	normalized := ratio_setting.FormatMatchingModelName(modelName)
-	if normalized == "" || normalized == modelName {
+	// PostgreSQL/SQLite may use case-sensitive collations. Fall back to a
+	// normalized in-memory comparison so case-only aliases and whitespace do
+	// not make an enabled channel appear unavailable.
+	var abilities []Ability
+	if err := DB.Where("enabled = ?", true).Find(&abilities).Error; err != nil {
 		return false
 	}
-	count = 0
-	err = DB.Model(&Ability{}).
-		Where(commonGroupCol+" = ? and model = ? and channel_id = ? and enabled = ?", group, normalized, channelID, true).
-		Count(&count).Error
-	return err == nil && count > 0
+	wanted := modelName
+	normalized := strings.TrimSpace(ratio_setting.FormatMatchingModelName(wanted))
+	for _, ability := range abilities {
+		if ability.ChannelId != channelID || !strings.EqualFold(strings.TrimSpace(ability.Group), group) {
+			continue
+		}
+		candidate := strings.TrimSpace(ability.Model)
+		if strings.EqualFold(candidate, wanted) || (normalized != "" && strings.EqualFold(candidate, normalized)) {
+			return true
+		}
+	}
+	return false
 }
 
 func isChannelIDInList(list []int, channelID int) bool {

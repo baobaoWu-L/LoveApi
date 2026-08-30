@@ -53,8 +53,12 @@ export type PricingModel = {
   billing_mode?: string
   /** Raw expression describing dynamic / tiered billing */
   billing_expr?: string
+  billing_mode_by_group?: Record<string, string>
+  billing_expr_by_group?: Record<string, string>
   /** Pricing version returned by backend, useful for cache busting */
   pricing_version?: string
+  /** Fixed per-request USD prices by tier, e.g. image resolution. */
+  request_pricing?: Record<string, number>
   /**
    * Optional model metadata fields. These are not yet returned by the backend
    * and are populated client-side from {@link inferModelMetadata}.

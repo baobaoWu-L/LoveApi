@@ -41,6 +41,7 @@ export type ApiKeyGroupOption = {
   label: string
   desc?: string
   ratio?: number | string
+  models?: string[]
 }
 
 type ApiKeyGroupComboboxProps = {
@@ -152,6 +153,11 @@ export function ApiKeyGroupCombobox({
                 {selectedOption.desc}
               </span>
             )}
+            {selectedOption?.models?.length ? (
+              <span className='text-muted-foreground block truncate text-[10px] sm:text-xs'>
+                {t('Models')}: {selectedOption.models.join(', ')}
+              </span>
+            ) : null}
           </span>
           <span className='hidden sm:block'>
             <GroupRatioBadge ratio={selectedOption?.ratio} />
@@ -196,6 +202,11 @@ export function ApiKeyGroupCombobox({
                         {option.desc}
                       </span>
                     )}
+                    <span className='text-muted-foreground mt-1 block text-[11px] leading-snug'>
+                      {option.models?.length
+                        ? `${t('Models')}: ${option.models.join(', ')}`
+                        : t('No callable models in this group')}
+                    </span>
                   </span>
                   <GroupRatioBadge ratio={option.ratio} />
                 </CommandItem>

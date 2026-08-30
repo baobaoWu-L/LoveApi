@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
@@ -17,27 +18,68 @@ import (
 )
 
 type Log struct {
-	Id               int    `json:"id" gorm:"index:idx_created_at_id,priority:1;index:idx_user_id_id,priority:2"`
-	UserId           int    `json:"user_id" gorm:"index;index:idx_user_id_id,priority:1"`
-	CreatedAt        int64  `json:"created_at" gorm:"bigint;index:idx_created_at_id,priority:2;index:idx_created_at_type"`
-	Type             int    `json:"type" gorm:"index:idx_created_at_type"`
-	Content          string `json:"content"`
-	Username         string `json:"username" gorm:"index;index:index_username_model_name,priority:2;default:''"`
-	TokenName        string `json:"token_name" gorm:"index;default:''"`
-	ModelName        string `json:"model_name" gorm:"index;index:index_username_model_name,priority:1;default:''"`
-	Quota            int    `json:"quota" gorm:"default:0"`
-	PromptTokens     int    `json:"prompt_tokens" gorm:"default:0"`
-	CompletionTokens int    `json:"completion_tokens" gorm:"default:0"`
-	UseTime          int    `json:"use_time" gorm:"default:0"`
-	IsStream         bool   `json:"is_stream"`
-	ChannelId        int    `json:"channel" gorm:"index"`
-	ChannelName      string `json:"channel_name" gorm:"->"`
-	TokenId          int    `json:"token_id" gorm:"default:0;index"`
-	Group            string `json:"group" gorm:"index"`
-	Ip               string `json:"ip" gorm:"index;default:''"`
+	Id                int    `json:"id" gorm:"index:idx_created_at_id,priority:1;index:idx_user_id_id,priority:2"`
+	UserId            int    `json:"user_id" gorm:"index;index:idx_user_id_id,priority:1"`
+	CreatedAt         int64  `json:"created_at" gorm:"bigint;index:idx_created_at_id,priority:2;index:idx_created_at_type"`
+	Type              int    `json:"type" gorm:"index:idx_created_at_type"`
+	Content           string `json:"content"`
+	Username          string `json:"username" gorm:"index;index:index_username_model_name,priority:2;default:''"`
+	TokenName         string `json:"token_name" gorm:"index;default:''"`
+	ModelName         string `json:"model_name" gorm:"index;index:index_username_model_name,priority:1;default:''"`
+	Quota             int    `json:"quota" gorm:"default:0"`
+	PromptTokens      int    `json:"prompt_tokens" gorm:"default:0"`
+	CompletionTokens  int    `json:"completion_tokens" gorm:"default:0"`
+	UseTime           int    `json:"use_time" gorm:"default:0"`
+	IsStream          bool   `json:"is_stream"`
+	ChannelId         int    `json:"channel" gorm:"index"`
+	ChannelName       string `json:"channel_name" gorm:"->"`
+	TokenId           int    `json:"token_id" gorm:"default:0;index"`
+	Group             string `json:"group" gorm:"index"`
+	Ip                string `json:"ip" gorm:"index;default:''"`
 	RequestId         string `json:"request_id,omitempty" gorm:"type:varchar(64);index:idx_logs_request_id;default:''"`
 	UpstreamRequestId string `json:"upstream_request_id,omitempty" gorm:"type:varchar(128);index:idx_logs_upstream_request_id;default:''"`
 	Other             string `json:"other"`
+}
+
+var sensitiveUsageKeys = map[string]struct{}{
+	"prompt": {}, "prompt_en": {}, "messages": {}, "message": {},
+	"content": {}, "input": {}, "output": {}, "data": {},
+	"response": {}, "result": {}, "image": {}, "image_url": {},
+	"video": {}, "video_url": {}, "file": {}, "files": {},
+}
+
+func sanitizeUsageOther(value map[string]interface{}) map[string]interface{} {
+	if len(value) == 0 {
+		return nil
+	}
+	clean := make(map[string]interface{}, len(value))
+	for key, item := range value {
+		if _, blocked := sensitiveUsageKeys[strings.ToLower(key)]; blocked {
+			continue
+		}
+		if safe, keep := sanitizeUsageValue(item); keep {
+			clean[key] = safe
+		}
+	}
+	return clean
+}
+
+func sanitizeUsageValue(value interface{}) (interface{}, bool) {
+	switch nested := value.(type) {
+	case map[string]interface{}:
+		safe := sanitizeUsageOther(nested)
+		return safe, len(safe) > 0
+	case []interface{}:
+		items := make([]interface{}, 0, len(nested))
+		for _, item := range nested {
+			if safe, keep := sanitizeUsageValue(item); keep {
+				items = append(items, safe)
+			}
+		}
+		return items, len(items) > 0
+	default:
+		return value, true
+	}
 }
 
 // don't use iota, avoid change log type value
@@ -149,7 +191,7 @@ func RecordErrorLog(c *gin.Context, userId int, channelId int, modelName string,
 	username := c.GetString("username")
 	requestId := c.GetString(common.RequestIdKey)
 	upstreamRequestId := c.GetString(common.UpstreamRequestIdKey)
-	otherStr := common.MapToJsonStr(other)
+	otherStr := common.MapToJsonStr(sanitizeUsageOther(other))
 	// 判断是否需要记录 IP
 	needRecordIp := false
 	if settingMap, err := GetUserSetting(userId, false); err == nil {
@@ -162,7 +204,7 @@ func RecordErrorLog(c *gin.Context, userId int, channelId int, modelName string,
 		Username:         username,
 		CreatedAt:        common.GetTimestamp(),
 		Type:             LogTypeError,
-		Content:          content,
+		Content:          "",
 		PromptTokens:     0,
 		CompletionTokens: 0,
 		TokenName:        tokenName,
@@ -212,7 +254,7 @@ func RecordConsumeLog(c *gin.Context, userId int, params RecordConsumeLogParams)
 	username := c.GetString("username")
 	requestId := c.GetString(common.RequestIdKey)
 	upstreamRequestId := c.GetString(common.UpstreamRequestIdKey)
-	otherStr := common.MapToJsonStr(params.Other)
+	otherStr := common.MapToJsonStr(sanitizeUsageOther(params.Other))
 	// 判断是否需要记录 IP
 	needRecordIp := false
 	if settingMap, err := GetUserSetting(userId, false); err == nil {
@@ -225,7 +267,7 @@ func RecordConsumeLog(c *gin.Context, userId int, params RecordConsumeLogParams)
 		Username:         username,
 		CreatedAt:        common.GetTimestamp(),
 		Type:             LogTypeConsume,
-		Content:          params.Content,
+		Content:          "",
 		PromptTokens:     params.PromptTokens,
 		CompletionTokens: params.CompletionTokens,
 		TokenName:        params.TokenName,
@@ -285,14 +327,14 @@ func RecordTaskBillingLog(params RecordTaskBillingLogParams) {
 		Username:  username,
 		CreatedAt: common.GetTimestamp(),
 		Type:      params.LogType,
-		Content:   params.Content,
+		Content:   "",
 		TokenName: tokenName,
 		ModelName: params.ModelName,
 		Quota:     params.Quota,
 		ChannelId: params.ChannelId,
 		TokenId:   params.TokenId,
 		Group:     params.Group,
-		Other:     common.MapToJsonStr(params.Other),
+		Other:     common.MapToJsonStr(sanitizeUsageOther(params.Other)),
 	}
 	err := LOG_DB.Create(log).Error
 	if err != nil {

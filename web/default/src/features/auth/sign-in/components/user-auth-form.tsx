@@ -192,7 +192,10 @@ export function UserAuthForm({
 
     setIsWeChatSubmitting(true)
     try {
-      const res = await wechatLoginByCode(wechatCode)
+      const res = await wechatLoginByCode(wechatCode, {
+        registration: true,
+        legalConsent: !requiresLegalConsent || agreedToLegal,
+      })
       if (res?.success) {
         await handleLoginSuccess(res.data as { id?: number } | null, redirectTo)
         toast.success(t('Signed in via WeChat'))
@@ -376,6 +379,7 @@ export function UserAuthForm({
         <OAuthProviders
           status={status}
           disabled={isLoading || (requiresLegalConsent && !agreedToLegal)}
+          registrationConsent={!requiresLegalConsent || agreedToLegal}
           onWeChatLogin={hasWeChatLogin ? handleOpenWeChatDialog : undefined}
           isWeChatLoading={isWeChatSubmitting}
         />

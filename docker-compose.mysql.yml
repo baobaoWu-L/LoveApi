@@ -19,6 +19,12 @@ services:
       - SESSION_SECRET=740e859f2badc3dca4dbbc4121815f0d81cab2334695b5f3766afb1718c705e9
       - ERROR_LOG_ENABLED=true
       - BATCH_UPDATE_ENABLED=true
+      - MAX_REQUEST_BODY_MB=1024
+      # Upstream account dashboard (USD balance/spend). Supply these values
+      # through the host environment or a .env file; never commit the token.
+      - SUPERAI_ACCOUNT_API_TOKEN=${SUPERAI_ACCOUNT_API_TOKEN:-}
+      - SUPERAI_ACCOUNT_USER_ID=${SUPERAI_ACCOUNT_USER_ID:-}
+      - SUPERAI_ACCOUNT_API_URL=${SUPERAI_ACCOUNT_API_URL:-https://superaiapi.com/api/user/self}
     depends_on:
       - redis
       - mysql
@@ -33,6 +39,9 @@ services:
       - "3001:80"
     depends_on:
       - backend
+    volumes:
+      # 挂载 nginx 配置，改 nginx.conf 后 restart 即生效，无需重建镜像
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
     networks:
       - love-api-network
 

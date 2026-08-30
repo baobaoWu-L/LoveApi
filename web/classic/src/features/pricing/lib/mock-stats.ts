@@ -732,6 +732,25 @@ const IMAGE_PARAMS: SupportedParameter[] = [
     defaultValue: 'url',
     descriptionKey: 'How to deliver the resulting image',
   },
+  {
+    name: 'resolution_tier',
+    type: 'enum',
+    enumValues: ['1k', '2k', '4k'],
+    defaultValue: '2k',
+    descriptionKey: 'Billing/output resolution tier for image-2 models',
+  },
+  {
+    name: 'output_format',
+    type: 'enum',
+    enumValues: ['png', 'jpeg', 'webp'],
+    descriptionKey: 'Encoded image format when supported by the model',
+  },
+  {
+    name: 'background',
+    type: 'enum',
+    enumValues: ['auto', 'transparent', 'opaque'],
+    descriptionKey: 'Background mode when supported by the model',
+  },
 ]
 
 const VIDEO_PARAMS: SupportedParameter[] = [

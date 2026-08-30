@@ -38,7 +38,10 @@ type LogoutRequestConfig = AxiosRequestConfig & {
 /**
  * Hook for managing OAuth login
  */
-export function useOAuthLogin(status: SystemStatus | null) {
+export function useOAuthLogin(
+  status: SystemStatus | null,
+  registrationConsent = false
+) {
   const { t } = useTranslation()
   const [isLoading, setIsLoading] = useState(false)
   const [githubButtonText, setGithubButtonText] = useState('')
@@ -93,7 +96,7 @@ export function useOAuthLogin(status: SystemStatus | null) {
 
     try {
       await resetSession()
-      const state = await getOAuthState()
+      const state = await getOAuthState({ registration: registrationConsent, legalConsent: registrationConsent })
       if (!state) {
         toast.error(t('Failed to initialize OAuth'))
         if (githubTimeoutRef.current) {
@@ -124,7 +127,7 @@ export function useOAuthLogin(status: SystemStatus | null) {
     setIsLoading(true)
     try {
       await resetSession()
-      const state = await getOAuthState()
+      const state = await getOAuthState({ registration: registrationConsent, legalConsent: registrationConsent })
       if (!state) {
         toast.error(t('Failed to initialize OAuth'))
         return
@@ -145,7 +148,7 @@ export function useOAuthLogin(status: SystemStatus | null) {
     setIsLoading(true)
     try {
       await resetSession()
-      const state = await getOAuthState()
+      const state = await getOAuthState({ registration: registrationConsent, legalConsent: registrationConsent })
       if (!state) {
         toast.error(t('Failed to initialize OAuth'))
         return
@@ -170,7 +173,7 @@ export function useOAuthLogin(status: SystemStatus | null) {
     setIsLoading(true)
     try {
       await resetSession()
-      const state = await getOAuthState()
+      const state = await getOAuthState({ registration: registrationConsent, legalConsent: registrationConsent })
       if (!state) {
         toast.error(t('Failed to initialize OAuth'))
         return
@@ -195,7 +198,7 @@ export function useOAuthLogin(status: SystemStatus | null) {
     setIsLoading(true)
     try {
       await resetSession()
-      const state = await getOAuthState()
+      const state = await getOAuthState({ registration: registrationConsent, legalConsent: registrationConsent })
       if (!state) {
         toast.error(t('Failed to initialize OAuth'))
         return

@@ -166,6 +166,9 @@ export type ModelSettings = {
   ExposeRatioEnabled: boolean
   'billing_setting.billing_mode': string
   'billing_setting.billing_expr': string
+  'billing_setting.billing_mode_by_group': string
+  'billing_setting.billing_expr_by_group': string
+  ModelPriceMarkupFactor: string
   'tool_price_setting.prices': string
   TopupGroupRatio: string
   GroupRatio: string
@@ -209,6 +212,9 @@ export type BillingSettings = {
   ExposeRatioEnabled: boolean
   'billing_setting.billing_mode': string
   'billing_setting.billing_expr': string
+  'billing_setting.billing_mode_by_group': string
+  'billing_setting.billing_expr_by_group': string
+  ModelPriceMarkupFactor: string
   'tool_price_setting.prices': string
   TopupGroupRatio: string
   GroupRatio: string

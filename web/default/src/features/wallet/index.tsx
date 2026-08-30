@@ -17,9 +17,12 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
+import { toast } from 'sonner'
 import { getSelf } from '@/lib/api'
 import { useStatus } from '@/hooks/use-status'
+import { useIsAdmin } from '@/hooks/use-admin'
 import { useSystemConfig } from '@/hooks/use-system-config'
 import { SectionPageLayout } from '@/components/layout'
 import { AffiliateRewardsCard } from './components/affiliate-rewards-card'
@@ -45,8 +48,10 @@ import {
   getMinTopupAmount,
   isWaffoPancakePayment,
 } from './lib'
+import { getUpstreamBalanceSummary, syncUpstreamPricing } from './api'
 import type {
   UserWalletData,
+  UpstreamBalanceSummary,
   PaymentMethod,
   PresetAmount,
   CreemProduct,
@@ -73,8 +78,14 @@ export function Wallet(props: WalletProps) {
   const [selectedCreemProduct, setSelectedCreemProduct] =
     useState<CreemProduct | null>(null)
   const [showSubscriptionPanel, setShowSubscriptionPanel] = useState(true)
+  const [upstreamSummary, setUpstreamSummary] =
+    useState<UpstreamBalanceSummary | null>(null)
+  const [syncingUpstream, setSyncingUpstream] = useState(false)
+  const [syncingPrices, setSyncingPrices] = useState(false)
+  const queryClient = useQueryClient()
 
   const { status } = useStatus()
+  const isAdmin = useIsAdmin()
   const { currency } = useSystemConfig()
   const { topupInfo, presetAmounts, loading: topupLoading } = useTopupInfo()
 
@@ -119,9 +130,57 @@ export function Wallet(props: WalletProps) {
     }
   }, [])
 
+  const syncUpstream = useCallback(async () => {
+    setSyncingUpstream(true)
+    try {
+      const response = await getUpstreamBalanceSummary()
+      if (response.success && response.data) {
+        setUpstreamSummary(response.data)
+        toast.success(t('Upstream balances synchronized'))
+      } else {
+        toast.error(response.message || t('Failed to synchronize upstream balances'))
+      }
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : t('Failed to synchronize upstream balances')
+      )
+    } finally {
+      setSyncingUpstream(false)
+    }
+  }, [t])
+
+  const syncPrices = useCallback(async () => {
+    setSyncingPrices(true)
+    try {
+      const response = await syncUpstreamPricing()
+      if (response.success && response.data) {
+        toast.success(t('Prices synced successfully'))
+        queryClient.invalidateQueries({ queryKey: ['pricing'] })
+        queryClient.invalidateQueries({ queryKey: ['models'] })
+      } else {
+        toast.error(response.message || t('Price sync failed'))
+      }
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : t('Price sync failed')
+      )
+    } finally {
+      setSyncingPrices(false)
+    }
+  }, [queryClient, t])
+
   useEffect(() => {
     fetchUser()
   }, [fetchUser])
+
+  useEffect(() => {
+    if (!isAdmin) return
+    void getUpstreamBalanceSummary().then((response) => {
+      if (response.success && response.data) setUpstreamSummary(response.data)
+    }).catch(() => undefined)
+  }, [isAdmin])
 
   useEffect(() => {
     if (props.initialShowHistory) {
@@ -266,7 +325,15 @@ export function Wallet(props: WalletProps) {
         </SectionPageLayout.Description>
         <SectionPageLayout.Content>
           <div className='mx-auto flex w-full max-w-7xl flex-col gap-4 sm:gap-5'>
-            <WalletStatsCard user={user} loading={userLoading} />
+            <WalletStatsCard
+              user={user}
+              loading={userLoading}
+              upstream={isAdmin ? upstreamSummary : undefined}
+              onSyncUpstream={isAdmin ? syncUpstream : undefined}
+              syncingUpstream={syncingUpstream}
+              onSyncPrices={isAdmin ? syncPrices : undefined}
+              syncingPrices={syncingPrices}
+            />
 
             <div
               className={

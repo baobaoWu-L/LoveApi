@@ -2,6 +2,7 @@ package service
 
 import (
 	"errors"
+	"strconv"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
@@ -17,6 +18,7 @@ type RetryParam struct {
 	ModelName    string
 	Retry        *int
 	resetNextTry bool
+	attempted    map[int]struct{}
 }
 
 func (p *RetryParam) GetRetry() int {
@@ -43,6 +45,28 @@ func (p *RetryParam) IncreaseRetry() {
 
 func (p *RetryParam) ResetRetryNextTry() {
 	p.resetNextTry = true
+}
+
+func (p *RetryParam) seedAttemptedFromContext() {
+	if p.attempted == nil {
+		p.attempted = make(map[int]struct{})
+	}
+	for _, raw := range p.Ctx.GetStringSlice("use_channel") {
+		id, err := strconv.Atoi(raw)
+		if err == nil && id > 0 {
+			p.attempted[id] = struct{}{}
+		}
+	}
+}
+
+func (p *RetryParam) markAttempted(channelID int) {
+	if channelID <= 0 {
+		return
+	}
+	if p.attempted == nil {
+		p.attempted = make(map[int]struct{})
+	}
+	p.attempted[channelID] = struct{}{}
 }
 
 // CacheGetRandomSatisfiedChannel tries to get a random channel that satisfies the requirements.
@@ -85,6 +109,7 @@ func CacheGetRandomSatisfiedChannel(param *RetryParam) (*model.Channel, string, 
 	var err error
 	selectGroup := param.TokenGroup
 	userGroup := common.GetContextKeyString(param.Ctx, constant.ContextKeyUserGroup)
+	param.seedAttemptedFromContext()
 
 	if param.TokenGroup == "auto" {
 		if len(setting.GetAutoGroups()) == 0 {
@@ -115,7 +140,7 @@ func CacheGetRandomSatisfiedChannel(param *RetryParam) (*model.Channel, string, 
 			}
 			logger.LogDebug(param.Ctx, "Auto selecting group: %s, priorityRetry: %d", autoGroup, priorityRetry)
 
-			channel, _ = model.GetRandomSatisfiedChannel(autoGroup, param.ModelName, priorityRetry)
+			channel, _ = model.GetRandomSatisfiedChannelWithExclusions(autoGroup, param.ModelName, priorityRetry, param.attempted)
 			if channel == nil {
 				// Current group has no available channel for this model, try next group
 				// 当前分组没有该模型的可用渠道，尝试下一个分组
@@ -130,6 +155,7 @@ func CacheGetRandomSatisfiedChannel(param *RetryParam) (*model.Channel, string, 
 			}
 			common.SetContextKey(param.Ctx, constant.ContextKeyAutoGroup, autoGroup)
 			selectGroup = autoGroup
+			param.markAttempted(channel.Id)
 			logger.LogDebug(param.Ctx, "Auto selected group: %s", autoGroup)
 
 			// Prepare state for next retry
@@ -153,7 +179,10 @@ func CacheGetRandomSatisfiedChannel(param *RetryParam) (*model.Channel, string, 
 			break
 		}
 	} else {
-		channel, err = model.GetRandomSatisfiedChannel(param.TokenGroup, param.ModelName, param.GetRetry())
+		channel, err = model.GetRandomSatisfiedChannelWithExclusions(param.TokenGroup, param.ModelName, param.GetRetry(), param.attempted)
+		if channel != nil {
+			param.markAttempted(channel.Id)
+		}
 		if err != nil {
 			return nil, param.TokenGroup, err
 		}

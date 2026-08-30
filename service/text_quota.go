@@ -373,6 +373,16 @@ func PostTextConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, us
 	if err := SettleBilling(ctx, relayInfo, summary.Quota); err != nil {
 		logger.LogError(ctx, "error settling billing: "+err.Error())
 	}
+	if detail, ok := ctx.Get("image_billing_detail"); ok {
+		if imageDetail, ok := detail.(map[string]interface{}); ok {
+			imageDetail["actual_quota"] = summary.Quota
+			if common.QuotaPerUnit > 0 {
+				imageDetail["actual_price_usd"] = float64(summary.Quota) / common.QuotaPerUnit
+				extraContent = append(extraContent, fmt.Sprintf("实际扣费 $%.6f（%d quota）", float64(summary.Quota)/common.QuotaPerUnit, summary.Quota))
+			}
+			imageDetail["settled"] = summary.TotalTokens > 0
+		}
+	}
 
 	logModel := summary.ModelName
 	if strings.HasPrefix(logModel, "gpt-4-gizmo") {
@@ -428,6 +438,9 @@ func PostTextConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, us
 	if summary.ImageGenerationCallPrice > 0 {
 		other["image_generation_call"] = true
 		other["image_generation_call_price"] = summary.ImageGenerationCallPrice
+	}
+	if detail, ok := ctx.Get("image_billing_detail"); ok && detail != nil {
+		other["image_billing"] = detail
 	}
 	if summary.CacheCreationTokens > 0 {
 		other["cache_creation_tokens"] = summary.CacheCreationTokens

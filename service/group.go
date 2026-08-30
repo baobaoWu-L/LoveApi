@@ -3,12 +3,33 @@ package service
 import (
 	"strings"
 
+	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/setting"
 	"github.com/QuantumNous/new-api/setting/ratio_setting"
 )
 
+// NormalizeGroupName keeps legacy channel/token clients compatible with the
+// consolidated group configuration. Historical deployments exposed provider
+// groups such as MINIMAX; those names now belong to 国产大模型.
+func NormalizeGroupName(group string) string {
+	trimmed := strings.TrimSpace(group)
+	if strings.EqualFold(trimmed, "default") {
+		return "default"
+	}
+	switch strings.ToUpper(trimmed) {
+	case "MINIMAX", "MINMAX", "DEEPSEEK", "QWEN", "KIMI", "GLM":
+		return "国产大模型"
+	default:
+		return trimmed
+	}
+}
+
 func GetUserUsableGroups(userGroup string) map[string]string {
 	groupsCopy := setting.GetUserUsableGroupsCopy()
+	groupsCopy = normalizeGroupKeys(groupsCopy)
+	if strings.EqualFold(userGroup, "default") {
+		userGroup = "default"
+	}
 	if userGroup != "" {
 		specialSettings, b := ratio_setting.GetGroupRatioSetting().GroupSpecialUsableGroup.Get(userGroup)
 		if b {
@@ -36,8 +57,45 @@ func GetUserUsableGroups(userGroup string) map[string]string {
 	return groupsCopy
 }
 
+// GetUserUsableGroupsForRole keeps ordinary users subject to the configured
+// allow-list while administrators can always select every configured group.
+func GetUserUsableGroupsForRole(userGroup string, role int) map[string]string {
+	if role < common.RoleAdminUser {
+		return GetUserUsableGroups(userGroup)
+	}
+
+	descriptions := normalizeGroupKeys(setting.GetUserUsableGroupsCopy())
+	groups := make(map[string]string)
+	for group := range ratio_setting.GetGroupRatioCopy() {
+		description := descriptions[group]
+		if strings.TrimSpace(description) == "" {
+			description = group
+		}
+		groups[group] = description
+	}
+	return groups
+}
+
+func normalizeGroupKeys(groups map[string]string) map[string]string {
+	normalized := make(map[string]string, len(groups))
+	for name, desc := range groups {
+		if strings.EqualFold(name, "default") {
+			name = "default"
+		}
+		normalized[name] = desc
+	}
+	return normalized
+}
+
 func GroupInUserUsableGroups(userGroup, groupName string) bool {
+	groupName = NormalizeGroupName(groupName)
 	_, ok := GetUserUsableGroups(userGroup)[groupName]
+	return ok
+}
+
+func GroupInUserUsableGroupsForRole(userGroup, groupName string, role int) bool {
+	groupName = NormalizeGroupName(groupName)
+	_, ok := GetUserUsableGroupsForRole(userGroup, role)[groupName]
 	return ok
 }
 

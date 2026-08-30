@@ -35,7 +35,13 @@ type Pricing struct {
 	SupportedEndpointTypes []constant.EndpointType `json:"supported_endpoint_types"`
 	BillingMode            string                  `json:"billing_mode,omitempty"`
 	BillingExpr            string                  `json:"billing_expr,omitempty"`
+	BillingModeByGroup     map[string]string       `json:"billing_mode_by_group,omitempty"`
+	BillingExprByGroup     map[string]string       `json:"billing_expr_by_group,omitempty"`
 	PricingVersion         string                  `json:"pricing_version,omitempty"`
+	// RequestPricing lists fixed per-request USD prices by request tier (for
+	// example image resolution). It is intentionally separate from
+	// ModelPrice, which remains the base/default request price.
+	RequestPricing map[string]float64 `json:"request_pricing,omitempty"`
 }
 
 type PricingVendor struct {
@@ -124,7 +130,13 @@ func updatePricing() {
 	for i := range allMeta {
 		m := &allMeta[i]
 		if m.NameRule == NameRuleExact {
-			metaMap[m.ModelName] = m
+			// Duplicate metadata rows can exist after imports. Prefer the row
+			// with explicit endpoint metadata so an empty duplicate cannot erase
+			// the model's real protocol declaration.
+			if current, exists := metaMap[m.ModelName]; !exists ||
+				(strings.TrimSpace(current.Endpoints) == "" && strings.TrimSpace(m.Endpoints) != "") {
+				metaMap[m.ModelName] = m
+			}
 		} else {
 			switch m.NameRule {
 			case NameRulePrefix:
@@ -214,7 +226,7 @@ func updatePricing() {
 		modelSupportEndpointsStr[ability.Model] = endpoints
 	}
 
-	// 再补充模型自定义端点：若配置有效则替换默认端点，不做合并
+	// 再补充模型自定义端点：若配置有效则替换默认端点，不做合并。
 	for modelName, meta := range metaMap {
 		if strings.TrimSpace(meta.Endpoints) == "" {
 			continue
@@ -236,22 +248,10 @@ func updatePricing() {
 		}
 	}
 
-	// 待办4：所有聊天类模型统一支持 openai 与 anthropic 两种协议。
-	// 图像/嵌入/音频类模型没有 /v1/messages 聊天端点，仅保留 openai。
-	for model, endpoints := range modelSupportEndpointsStr {
-		n := strings.ToLower(model)
-		imageLike := strings.Contains(n, "image") || strings.Contains(n, "dall-e") ||
-			strings.Contains(n, "sora") || strings.Contains(n, "veo") ||
-			strings.Contains(n, "embed") || strings.Contains(n, "rerank") ||
-			strings.Contains(n, "whisper") || strings.Contains(n, "tts")
-		if !common.StringsContains(endpoints, "openai") {
-			endpoints = append(endpoints, "openai")
-			modelSupportEndpointsStr[model] = endpoints
-		}
-		if !imageLike && !common.StringsContains(endpoints, "anthropic") {
-			modelSupportEndpointsStr[model] = append(endpoints, "anthropic")
-		}
-	}
+	// Do not infer protocols from the model name. The list above is derived
+	// from the real channel adapter, while an explicit models.endpoints value
+	// is authoritative for that model. This prevents every model from being
+	// presented as supporting the same protocol.
 
 	modelSupportEndpointTypes = make(map[string][]constant.EndpointType)
 	for model, endpoints := range modelSupportEndpointsStr {
@@ -261,6 +261,13 @@ func updatePricing() {
 			supportedEndpoints = append(supportedEndpoints, endpointType)
 		}
 		modelSupportEndpointTypes[model] = supportedEndpoints
+	}
+	// MySQL folds model names case-insensitively, so the upstream
+	// `minimax-m3`/`MiniMax-M3` rows share one metadata value. Keep the
+	// lowercase request-priced variant's upstream Anthropic + OpenAI support
+	// explicit; the display-only uppercase alias is narrowed below.
+	if _, ok := modelSupportEndpointTypes["minimax-m3"]; ok {
+		modelSupportEndpointTypes["minimax-m3"] = []constant.EndpointType{constant.EndpointTypeAnthropic, constant.EndpointTypeOpenAI}
 	}
 
 	// 构建全局 supportedEndpointMap（默认 + 自定义覆盖）
@@ -304,32 +311,38 @@ func updatePricing() {
 
 	pricingMap = make([]Pricing, 0)
 	for model, groups := range modelGroupsMap {
+		meta, ok := metaMap[model]
+		if !ok || meta.Status != 1 {
+			continue
+		}
 		pricing := Pricing{
 			ModelName:              model,
 			EnableGroup:            groups.Items(),
 			SupportedEndpointTypes: modelSupportEndpointTypes[model],
 		}
-
-		// 补充模型元数据（描述、标签、供应商、状态）
-		if meta, ok := metaMap[model]; ok {
-			// 若模型被禁用(status!=1)，则直接跳过，不返回给前端
-			if meta.Status != 1 {
-				continue
-			}
-			pricing.Description = meta.Description
-			pricing.Icon = meta.Icon
-			pricing.Tags = meta.Tags
-			pricing.VendorID = meta.VendorID
+		if requestPricing := requestPricingForModel(model); len(requestPricing) > 0 {
+			pricing.RequestPricing = requestPricing
 		}
-		modelPrice, findPrice := ratio_setting.GetModelPrice(model, false)
-		if findPrice {
-			pricing.ModelPrice = modelPrice
+
+		// 模型主表是模型广场的来源；渠道能力只决定该模型是否可用。
+		pricing.Description = meta.Description
+		pricing.Icon = meta.Icon
+		pricing.Tags = meta.Tags
+		pricing.VendorID = meta.VendorID
+		if requestPrice, ok := RequestPriceUSD(model); ok {
+			pricing.ModelPrice = requestPrice
 			pricing.QuotaType = 1
 		} else {
-			modelRatio, _, _ := ratio_setting.GetModelRatio(model)
-			pricing.ModelRatio = modelRatio
-			pricing.CompletionRatio = ratio_setting.GetCompletionRatio(model)
-			pricing.QuotaType = 0
+			modelPrice, findPrice := ratio_setting.GetModelPrice(model, false)
+			if findPrice {
+				pricing.ModelPrice = modelPrice
+				pricing.QuotaType = 1
+			} else {
+				modelRatio, _, _ := ratio_setting.GetModelRatio(model)
+				pricing.ModelRatio = modelRatio
+				pricing.CompletionRatio = ratio_setting.GetCompletionRatio(model)
+				pricing.QuotaType = 0
+			}
 		}
 		if cacheRatio, ok := ratio_setting.GetCacheRatio(model); ok {
 			pricing.CacheRatio = &cacheRatio
@@ -354,7 +367,47 @@ func updatePricing() {
 				pricing.BillingExpr = expr
 			}
 		}
+		if modes := billing_setting.GetBillingModeByGroupCopy()[model]; len(modes) > 0 {
+			pricing.BillingModeByGroup = modes
+		}
+		if exprs := billing_setting.GetBillingExprByGroupCopy()[model]; len(exprs) > 0 {
+			pricing.BillingExprByGroup = exprs
+		}
 		pricingMap = append(pricingMap, pricing)
+	}
+
+	// MySQL's default case-insensitive collation folds the upstream MiniMax
+	// aliases together in abilities/models. Keep the four upstream spellings
+	// visible in the model plaza while retaining their distinct billing units.
+	var miniMaxAliases []Pricing
+	for _, pricing := range pricingMap {
+		switch pricing.ModelName {
+		case "MiniMax-M2.7":
+			alias := pricing
+			alias.ModelName = "minimax-m2.7"
+			alias.QuotaType = 1
+			alias.ModelRatio = 0
+			alias.CompletionRatio = 0
+			alias.CacheRatio = nil
+			alias.CreateCacheRatio = nil
+			alias.ModelPrice = 0.0125
+			miniMaxAliases = append(miniMaxAliases, alias)
+		case "minimax-m3":
+			alias := pricing
+			alias.ModelName = "MiniMax-M3"
+			alias.SupportedEndpointTypes = []constant.EndpointType{constant.EndpointTypeOpenAI}
+			alias.QuotaType = 0
+			alias.ModelPrice = 0
+			alias.ModelRatio = 0.625
+			alias.CompletionRatio = 3
+			alias.CacheRatio = nil
+			alias.CreateCacheRatio = nil
+			miniMaxAliases = append(miniMaxAliases, alias)
+		}
+	}
+	pricingMap = append(pricingMap, miniMaxAliases...)
+	for _, alias := range miniMaxAliases {
+		modelSupportEndpointTypes[alias.ModelName] = append([]constant.EndpointType(nil), alias.SupportedEndpointTypes...)
 	}
 
 	// 防止大更新后数据不通用

@@ -32,6 +32,7 @@ export type GenerateImagePayload = {
   images?: ImageInput[]
   mask?: ImageInput
   response_format?: string
+  output_format?: string
   // 分辨率档位（前端用于展示预期价格，后端据此/按 size 计量）
   resolution_tier?: string
 }
@@ -40,6 +41,7 @@ export type GenerateImagePayload = {
 export type GeneratedImage = {
   id: string
   url?: string
+  cache_key?: string
   b64_json?: string
   prompt: string
   size: string

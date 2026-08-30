@@ -189,6 +189,35 @@ function ConfigField({ code, text }: { code: string; text: string }) {
   )
 }
 
+// ===== Codex 子模型锁定注意事项（模型广场同款，统一格式）=====
+
+function CodexSubagentNote() {
+  return (
+    <div className='rounded-lg border border-rose-300/70 bg-rose-50/70 p-3 text-xs leading-relaxed text-rose-700 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-300'>
+      <strong>⚠️ Codex（ChatGPT）接入注意：</strong>不加下面锁定配置时，<em>主对话</em>用的是你选择的模型，
+      但 Codex 的 agent 运行时会调用<em>子模型</em>，可能命中其它模型（具体情况请看 控制台 → 使用日志）。
+      想让主对话与子模型都用同一个模型（gpt-5.6-sol），把下面这段配置写入{' '}
+      <code className='bg-muted rounded px-1 py-0.5 font-mono text-[10px]'>~/.codex/config.toml</code>{' '}
+      ，并用{' '}
+      <code className='bg-muted rounded px-1 py-0.5 font-mono text-[10px]'>codex -p loveapi</code>{' '}
+      启动：
+      <pre className='mt-2 overflow-x-auto rounded-md bg-rose-50 p-2 font-mono text-[10px] leading-relaxed text-rose-800 dark:bg-rose-950/40 dark:text-rose-100'>
+{`model = "gpt-5.6-sol"
+review_model = "gpt-5.6-sol"
+[agents]
+default_subagent_model = "gpt-5.6-sol"
+
+[profiles.loveapi]
+model = "gpt-5.6-sol"
+model_provider = "loveapi"`}
+      </pre>
+      <span>可修改的地方：把上面的 gpt-5.6-sol 全部替换成你选定的模型名即可（model、review_model、default_subagent_model、profiles.loveapi.model 四处要一致）。</span>
+      <br />
+      <span>扣费按实际调用的模型价格结算：选择高级模型不会按高级价格去扣低级模型的额度；调用哪个模型就按哪个模型的额度扣，请放心。</span>
+    </div>
+  )
+}
+
 // ===== 端点折叠卡片 =====
 
 function EndpointCard({
@@ -433,39 +462,93 @@ export function ApiDoc() {
                   >
                     <p className='text-muted-foreground text-sm leading-relaxed'>
                       在 <code className='bg-muted rounded px-1 text-xs'>~/.codex/config.toml</code>{' '}
-                      中配置 Love Api 作为 Codex CLI 的模型提供方：
+                      与 <code className='bg-muted rounded px-1 text-xs'>~/.codex/auth.json</code>{' '}
+                      中配置 Love Api 作为 Codex（ChatGPT）桌面端 / CLI 的模型提供方
+                      （密钥请在控制台 → API 密钥 里创建{' '}
+                      <code className='bg-muted rounded px-1 text-xs'>sk-</code>{' '}
+                      开头的令牌）：
                     </p>
+                    <div className='text-xs font-semibold text-muted-foreground'>
+                      ① 模型提供方 / 运行配置
+                    </div>
                     <CodeBlock
                       code={`# 切换模型无需改此文件：直接在 Codex 桌面端选择，选中哪个就用哪个（不会自动路由到其它模型）
 # 下面 model 仅为默认值
 model = "gpt-5.6-sol"
 model_provider = "loveapi"
+model_reasoning_effort = "medium"
+
+# --- 关键：把子任务模型也固定为同一个，避免 Codex 调用其它模型（如 gpt-5.6-terra）---
+# /review（代码审查）用的模型，默认可能与主模型不同、独立生效
+review_model = "gpt-5.6-sol"
+# 多代理 / 子代理（explorer、worker 等）的默认模型，不跟随上面的 model
+[agents]
+default_subagent_model = "gpt-5.6-sol"
+default_subagent_reasoning_effort = "medium"
+
+# --- 缓存优化配置 ---
+cache_size_mb = 512
+cache_ttl = "30m"
+smart_cache = true
+cache_compression = true
 
 [model_providers.loveapi]
 name = "Love API"
 base_url = "${serverAddress}/v1"
-env_key = "LOVEAPI_API_KEY"
-wire_api = "chat"`}
+wire_api = "responses"
+requires_openai_auth = true
+web_search = "live"
+
+[features]
+collaboration_modes = true
+unified_exec = false
+multi_agent = true
+search_tool = true
+steer = true
+
+# --- 固定只用一个模型：用 codex -p loveapi 启用 ---
+[profiles.loveapi]
+model = "gpt-5.6-sol"
+model_provider = "loveapi"`}
                       lang='toml'
                     />
-                    <div className='rounded-lg border border-amber-200/70 bg-amber-50/70 p-3 text-xs leading-relaxed text-amber-700 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-300'>
-                      <strong>模型切换：</strong>
-                      直接在你的 Codex 桌面端切换模型即可，选中哪个就用哪个，**无需修改此文件**。
-                      Codex 默认会在多个模型间自动切换（例如有的任务会去调用
-                      <code className='bg-muted mx-1 rounded px-1'>gpt-5.6-terra</code>
-                      等）；要「选哪个模型、就用哪个模型」，只需保持上面
-                      <em>只有一个</em>
-                      <code className='bg-muted mx-1 rounded px-1'>model</code>
-                      和
-                      <code className='bg-muted mx-1 rounded px-1'>model_provider</code>
-                      （不添加其它模型/模型提供方），Codex 就会只使用你选定的模型。
+                    <div className='text-xs font-semibold text-muted-foreground'>
+                      ② 密钥文件：~/.codex/auth.json
                     </div>
-                    <div className='bg-muted/50 rounded-lg p-3 text-xs text-muted-foreground'>
-                      然后在环境变量中设置对应的密钥：
-                      <CodeBlock
-                        code={`export LOVEAPI_API_KEY=sk-your-loveapi-key`}
-                        lang='bash'
-                      />
+                    <CodeBlock
+                      code={JSON.stringify(
+                        {
+                          OPENAI_API_KEY: 'sk-your-loveapi-key',
+                        },
+                        null,
+                        2
+                      )}
+                      lang='json'
+                    />
+                    <p className='text-xs leading-relaxed text-muted-foreground'>
+                      <code className='bg-muted rounded px-1 text-xs'>~/.codex/auth.json</code>{' '}
+                      中的{' '}
+                      <code className='bg-muted rounded px-1 text-xs'>OPENAI_API_KEY</code>{' '}
+                      请替换为控制台里{' '}
+                      <code className='bg-muted rounded px-1 text-xs'>sk-</code>{' '}
+                      开头的真实密钥，否则无法通过鉴权。
+                    </p>
+                    <div className='rounded-lg border border-amber-200/70 bg-amber-50/70 p-3 text-xs leading-relaxed text-amber-700 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-300'>
+                      <strong>固定只用一个模型：</strong>
+                      主对话模型用{' '}
+                      <code className='bg-muted mx-1 rounded px-1'>[profiles.loveapi]</code>{' '}
+                      固化，并用{' '}
+                      <code className='bg-muted mx-1 rounded px-1'>codex -p loveapi</code>{' '}
+                      启动。同时还必须把{' '}
+                      <code className='bg-muted mx-1 rounded px-1'>review_model</code>{' '}
+                      和{' '}
+                      <code className='bg-muted mx-1 rounded px-1'>agents.default_subagent_model</code>{' '}
+                      一并固定为上面同一个{' '}
+                      <code className='bg-muted mx-1 rounded px-1'>gpt-5.6-sol</code>{' '}
+                      （否则 <code className='bg-muted mx-1 rounded px-1'>/review</code> 代码审查、多代理子任务仍会各自去调用其它模型，例如{' '}
+                      <code className='bg-muted mx-1 rounded px-1'>gpt-5.6-terra</code>）。只要保持这三处一致，Codex 就不会切换 / 跨模型调用其它模型。
+                      <br />
+                      <span>扣费按实际调用的模型价格结算：不会出现按高级模型价格去扣低级模型额度的情况；调用哪个模型就按哪个模型的额度扣，请放心。</span>
                     </div>
                     <div className='text-xs text-muted-foreground space-y-1'>
                       <ConfigField
@@ -473,10 +556,24 @@ wire_api = "chat"`}
                         text='Love Api 的 OpenAI 兼容端点，末尾需要 /v1'
                       />
                       <ConfigField
-                        code='env_key'
-                        text='读取 API Key 的环境变量名'
+                        code='wire_api'
+                        text='固定为 "responses"（Codex / ChatGPT 协议）'
                       />
-                      <ConfigField code='wire_api' text='固定为 "chat"' />
+                      <ConfigField
+                        code='requires_openai_auth'
+                        text='开启后读取 auth.json 中的 OPENAI_API_KEY 进行鉴权'
+                      />
+                      <ConfigField
+                        code='config.toml'
+                        text='配置文件路径：~/.codex/config.toml'
+                      />
+                      <ConfigField
+                        code='auth.json'
+                        text='密钥文件路径：~/.codex/auth.json'
+                      />
+                    </div>
+                    <div className='mt-3'>
+                      <CodexSubagentNote />
                     </div>
                   </Section>
 
@@ -596,27 +693,30 @@ print(resp.choices[0].message.content)`}
                     title={SECTION_TITLES.ccswitch}
                   >
                     <p className='text-muted-foreground text-sm leading-relaxed'>
-                      CC Switch 是一个模型路由切换工具，支持一键导入 provider。点击下面任意深链即可把 Love Api
-                      添加为 Claude / Codex / Gemini 的提供方（<code className='bg-muted rounded px-1 text-xs'>app=codex</code>{' '}
-                      时端点需带 <code className='bg-muted rounded px-1 text-xs'>/v1</code>）：
+                      CC Switch 是一个模型路由切换工具，支持一键导入 provider。用下面深链把 Love Api 添加为 Codex 的提供方
+                      （<code className='bg-muted rounded px-1 text-xs'>app=codex</code> 时端点需带{' '}
+                      <code className='bg-muted rounded px-1 text-xs'>/v1</code>）。深链只负责导入提供方；要「固定只用一个模型」，再照第 ② 步把配置粘贴到{' '}
+                      <code className='bg-muted rounded px-1 text-xs'>~/.codex/config.toml</code>{' '}
+                      并用第 ③ 步启动：
                     </p>
                     <CodeBlock
-                      code={`ccswitch://v1/import?resource=provider&app=claude&name=LoveApi&endpoint=${serverAddress}&apiKey=sk-your-loveapi-key&model=claude-sonnet-4-20250514&homepage=${serverAddress}&enabled=true`}
+                      code={`# ① 一键导入 Love Api 为 Codex 提供方（endpoint 需带 /v1）
+ccswitch://v1/import?resource=provider&app=codex&name=LoveApi&endpoint=${serverAddress}/v1&apiKey=sk-your-loveapi-key&model=gpt-5.6-sol&homepage=${serverAddress}&enabled=true`}
                       lang='text'
                     />
-                    <p className='text-muted-foreground text-sm'>
-                      Codex 示例（注意 endpoint 加{' '}
-                      <code className='bg-muted rounded px-1 text-xs'>/v1</code>）：
-                    </p>
                     <CodeBlock
-                      code={`ccswitch://v1/import?resource=provider&app=codex&name=LoveApi&endpoint=${serverAddress}/v1&apiKey=sk-your-loveapi-key&model=gpt-5.6-sol&homepage=${serverAddress}&enabled=true`}
-                      lang='text'
+                      code={`# ② 粘贴到 ~/.codex/config.toml，固化单一模型（含主模型 /review 审查 / 子代理三处）
+model = "gpt-5.6-sol"
+review_model = "gpt-5.6-sol"
+[agents]
+default_subagent_model = "gpt-5.6-sol"
+
+# ③ 用它启动，只使用上面这一个模型
+[profiles.loveapi]
+model = "gpt-5.6-sol"
+model_provider = "loveapi"`}
+                      lang='toml'
                     />
-                    <p className='text-muted-foreground text-xs leading-relaxed'>
-                      切换模型直接在 Codex / Claude 桌面端选择即可，无需改此文件；这里的
-                      <code className='bg-muted mx-1 rounded px-1'>model</code>
-                      仅为导入时的默认值（也可省略）。
-                    </p>
                     <div className='overflow-hidden rounded-lg border'>
                       <table className='w-full text-sm'>
                         <thead>
@@ -650,6 +750,9 @@ print(resp.choices[0].message.content)`}
                           ))}
                         </tbody>
                       </table>
+                    </div>
+                    <div className='mt-3'>
+                      <CodexSubagentNote />
                     </div>
                   </Section>
 
@@ -823,6 +926,37 @@ print(resp.choices[0].message.content)`}
                           null,
                           2
                         )}
+                      />
+                    </EndpointCard>
+                    <EndpointCard
+                      method='POST'
+                      path='/v1/videos'
+                      desc='视频生成（OpenAI 视频格式）'
+                    >
+                      <CodeBlock
+                        code={JSON.stringify(
+                          {
+                            model: 'grok-imagine-video',
+                            prompt: 'A cinematic sunset over the ocean',
+                            seconds: '5',
+                            size: '1280x720',
+                          },
+                          null,
+                          2
+                        )}
+                      />
+                      <p className='text-muted-foreground mt-3 text-xs'>
+                        返回任务 ID 后使用 GET /v1/videos/{'{task_id}'} 查询，完成后从 /v1/videos/{'{task_id}'}/content 下载。
+                      </p>
+                    </EndpointCard>
+                    <EndpointCard
+                      method='GET'
+                      path='/v1/videos/{task_id}'
+                      desc='查询视频生成任务'
+                    >
+                      <CodeBlock
+                        code={`curl ${serverAddress}/v1/videos/video_task_id \\\n+  -H "Authorization: Bearer sk-your-loveapi-key"`}
+                        lang='bash'
                       />
                     </EndpointCard>
                   </Section>

@@ -61,7 +61,19 @@ export type DynamicPricingSummary = {
 const PRIMARY_DYNAMIC_FIELDS = new Set(['inputPrice', 'outputPrice'])
 
 export function isDynamicPricingModel(model: PricingModel): boolean {
-  return model.billing_mode === 'tiered_expr' && Boolean(model.billing_expr)
+  return (
+    (model.billing_mode === 'tiered_expr' && Boolean(model.billing_expr)) ||
+    Object.values(model.billing_expr_by_group || {}).some(Boolean)
+  )
+}
+
+function getDynamicExpression(model: PricingModel, group?: string): string {
+  if (group) {
+    const grouped = model.billing_expr_by_group?.[group]
+    if (grouped) return grouped
+  }
+  if (model.billing_expr) return model.billing_expr
+  return Object.values(model.billing_expr_by_group || {}).find(Boolean) || ''
 }
 
 export function getDynamicDisplayGroupRatio(model: PricingModel): number {
@@ -122,10 +134,11 @@ export function formatDynamicUnitPrice(
   })
 }
 
-export function getDynamicPricingTiers(model: PricingModel): ParsedTier[] {
+export function getDynamicPricingTiers(model: PricingModel, group?: string): ParsedTier[] {
   if (!isDynamicPricingModel(model)) return []
+  const expression = getDynamicExpression(model, group)
   const { billingExpr } = splitBillingExprAndRequestRules(
-    model.billing_expr || ''
+    expression
   )
   return parseTiersFromExpr(billingExpr)
 }
@@ -133,7 +146,7 @@ export function getDynamicPricingTiers(model: PricingModel): ParsedTier[] {
 export function hasDynamicRequestRules(model: PricingModel): boolean {
   if (!isDynamicPricingModel(model)) return false
   const { requestRuleExpr } = splitBillingExprAndRequestRules(
-    model.billing_expr || ''
+    getDynamicExpression(model)
   )
   return Boolean(tryParseRequestRuleExpr(requestRuleExpr || '')?.length)
 }
@@ -170,14 +183,15 @@ export function getDynamicPriceEntries(
 
 export function getDynamicPricingSummary(
   model: PricingModel,
-  options: DynamicPriceOptions
+  options: DynamicPriceOptions,
+  group?: string
 ): DynamicPricingSummary | null {
   if (!isDynamicPricingModel(model)) return null
 
-  const tiers = getDynamicPricingTiers(model)
+  const tiers = getDynamicPricingTiers(model, group)
   const tier = tiers[0] || null
   const entries = getDynamicPriceEntries(tier, options)
-  const rawExpression = model.billing_expr || ''
+  const rawExpression = getDynamicExpression(model, group)
 
   return {
     tiers,

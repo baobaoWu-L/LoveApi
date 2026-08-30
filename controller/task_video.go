@@ -283,6 +283,7 @@ func redactVideoResponseBody(body []byte) []byte {
 	if err := json.Unmarshal(body, &m); err != nil {
 		return body
 	}
+	redactTaskContent(m)
 	resp, _ := m["response"].(map[string]any)
 	if resp != nil {
 		delete(resp, "bytesBase64Encoded")
@@ -302,6 +303,30 @@ func redactVideoResponseBody(body []byte) []byte {
 		return body
 	}
 	return b
+}
+
+func redactTaskContent(value map[string]any) {
+	blocked := map[string]struct{}{
+		"prompt": {}, "prompt_en": {}, "messages": {}, "message": {},
+		"input": {}, "output": {}, "content": {}, "text": {},
+		"bytesBase64Encoded": {},
+	}
+	for key, item := range value {
+		if _, ok := blocked[key]; ok {
+			delete(value, key)
+			continue
+		}
+		switch nested := item.(type) {
+		case map[string]any:
+			redactTaskContent(nested)
+		case []any:
+			for _, entry := range nested {
+				if child, ok := entry.(map[string]any); ok {
+					redactTaskContent(child)
+				}
+			}
+		}
+	}
 }
 
 func truncateBase64(s string) string {

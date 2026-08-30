@@ -39,6 +39,56 @@ type ImageRequest struct {
 	Extra map[string]json.RawMessage `json:"-"`
 }
 
+// GPTImage2PricesUSD contains the per-image USD prices used by the local
+// gateway. These are intentionally fixed per request and do not use model or
+// group multipliers.
+var GPTImage2PricesUSD = map[string]float64{
+	"1k": 0.007,
+	"2k": 0.007,
+	"4k": 0.50,
+}
+
+var fixedImagePricesUSD = map[string]float64{
+	"gemini-3-pro-image":     0.50,
+	"gemini-3.1-flash-image": 0.50,
+}
+
+func (i *ImageRequest) ResolutionTier() string {
+	if i == nil {
+		return "2k"
+	}
+	if raw, ok := i.Extra["resolution_tier"]; ok {
+		var tier string
+		if err := common.Unmarshal(raw, &tier); err == nil {
+			tier = strings.ToLower(strings.TrimSpace(tier))
+			if tier == "1k" || tier == "2k" || tier == "4k" {
+				return tier
+			}
+		}
+	}
+	return "2k"
+}
+
+func ImagePriceUSD(modelName, tier string) (float64, bool) {
+	modelName = strings.ToLower(strings.TrimSpace(modelName))
+	if price, ok := fixedImagePricesUSD[modelName]; ok {
+		return price, true
+	}
+	if modelName != "gpt-image-2" {
+		return 0, false
+	}
+	price, ok := GPTImage2PricesUSD[strings.ToLower(strings.TrimSpace(tier))]
+	if !ok {
+		price = GPTImage2PricesUSD["2k"]
+	}
+	return price, true
+}
+
+func IsFixedImageModel(modelName string) bool {
+	_, ok := fixedImagePricesUSD[strings.ToLower(strings.TrimSpace(modelName))]
+	return ok
+}
+
 func (i *ImageRequest) UnmarshalJSON(data []byte) error {
 	// 先解析成 map[string]interface{}
 	var rawMap map[string]json.RawMessage
@@ -151,13 +201,13 @@ func (i *ImageRequest) GetTokenCountMeta() *types.TokenCountMeta {
 		}
 	}
 
-	// gpt-image 按次计费：根据分辨率档位调整价格倍率（前端 extra_fields 传 resolution_tier）
-	// 2K 默认按次 $0.07；4K 按次 $0.30，倍率 = 0.30 / 0.07
-	if strings.HasPrefix(i.Model, "gpt-image") {
-		if tierRaw, ok := i.Extra["resolution_tier"]; ok {
-			var tier string
-			if err := common.Unmarshal(tierRaw, &tier); err == nil && tier == "4k" {
-				sizeRatio = 0.30 / 0.07
+	// Fixed-price image models use a per-image price. Include the requested count in
+	// the pre-consume estimate; settlement uses the same fixed unit price.
+	if unitPrice, ok := ImagePriceUSD(i.Model, i.ResolutionTier()); ok {
+		if strings.EqualFold(strings.TrimSpace(i.Model), "gpt-image-2") {
+			sizeRatio = unitPrice / GPTImage2PricesUSD["2k"]
+			if i.N != nil && *i.N > 1 {
+				sizeRatio *= float64(*i.N)
 			}
 		}
 	}

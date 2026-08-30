@@ -38,6 +38,7 @@ import type {
   WaffoPaymentResponse,
   WaffoPancakePaymentRequest,
   WaffoPancakePaymentResponse,
+  UpstreamBalanceSummary,
 } from './types'
 
 // ============================================================================
@@ -49,6 +50,30 @@ import type {
  */
 export function isApiSuccess(response: ApiResponse): boolean {
   return response.success === true || response.message === 'success'
+}
+
+/** Synchronize and aggregate balances for upstream channels (admin only). */
+export async function getUpstreamBalanceSummary(): Promise<{
+  success: boolean
+  message?: string
+  data?: UpstreamBalanceSummary
+}> {
+  const res = await api.get('/api/channel/upstream_balance_summary', {
+    timeout: 30000,
+  })
+  return res.data
+}
+
+/** Synchronize model pricing from the configured SuperAI pricing endpoint. */
+export async function syncUpstreamPricing(): Promise<{
+  success: boolean
+  message?: string
+  data?: { updated: number; markup: number; source?: string }
+}> {
+  const res = await api.post('/api/models/sync_upstream_pricing', undefined, {
+    timeout: 30000,
+  })
+  return res.data
 }
 
 /**

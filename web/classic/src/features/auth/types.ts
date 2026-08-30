@@ -39,6 +39,8 @@ export interface RegisterPayload {
   verification_code?: string
   aff?: string
   turnstile?: string
+  agree_user_agreement?: boolean
+  agree_privacy_policy?: boolean
 }
 
 export interface PasswordResetPayload {

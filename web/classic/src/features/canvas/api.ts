@@ -28,9 +28,10 @@ export { fetchActiveChatKey as getGenerationKey }
  * 鉴权使用当前用户可用 API Key（Bearer sk-xxx），走 /v1 反代到后端 relay。
  */
 export async function generateImage(
-  payload: GenerateImagePayload
+  payload: GenerateImagePayload,
+  apiKey?: string
 ): Promise<ImageResponseData> {
-  const key = await fetchActiveChatKey()
+  const key = apiKey || (await fetchActiveChatKey())
   const res = await axios.post<ImageResponseData>('/v1/images/generations', payload, {
     headers: {
       Authorization: `Bearer ${key}`,
@@ -38,6 +39,18 @@ export async function generateImage(
     },
   })
   return res.data
+}
+
+/** Probe the authenticated model list without generating an image. */
+export async function canUseImageModel(apiKey: string): Promise<boolean> {
+  const res = await axios.get<{ data?: Array<{ id?: string }> }>('/v1/models', {
+    headers: { Authorization: `Bearer ${apiKey}` },
+  })
+  return Boolean(
+    res.data?.data?.some(
+      (item) => item.id?.toLowerCase() === 'gpt-image-2'
+    )
+  )
 }
 
 /** 将上传的图片文件转成 data URL（base64），用于参考图/蒙版 */

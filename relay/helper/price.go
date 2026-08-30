@@ -66,11 +66,27 @@ func HandleGroupRatio(ctx *gin.Context, relayInfo *relaycommon.RelayInfo) types.
 
 func ModelPriceHelper(c *gin.Context, info *relaycommon.RelayInfo, promptTokens int, meta *types.TokenCountMeta) (types.PriceData, error) {
 	modelPrice, usePrice := ratio_setting.GetModelPrice(info.OriginModelName, false)
+	// Fixed-price image models are authoritative in RequestPricingTable. This
+	// keeps billing correct even when a stale ratio remains in persisted settings.
+	if requestPrice, ok := model.RequestPriceUSD(info.OriginModelName); ok {
+		modelPrice = requestPrice
+		usePrice = true
+	}
 
 	groupRatioInfo := HandleGroupRatio(c, info)
+	// Fixed-price image models are priced per generated image in USD. Their
+	// request price (and, for gpt-image-2, resolution tier) is authoritative,
+	// so neither the model ratio nor the user's group multiplier may alter it.
+	if _, ok := model.RequestPriceUSD(info.OriginModelName); ok {
+		groupRatioInfo.GroupRatio = 1
+		groupRatioInfo.GroupSpecialRatio = -1
+		groupRatioInfo.HasSpecialRatio = false
+	}
 
-	// Check if this model uses tiered_expr billing
-	if billing_setting.GetBillingMode(info.OriginModelName) == billing_setting.BillingModeTieredExpr {
+	// Check if this model uses tiered_expr billing. Fixed-price request models
+	// always bypass tiered settings, including stale per-group expressions.
+	if _, requestPriced := model.RequestPriceUSD(info.OriginModelName); !requestPriced &&
+		billing_setting.GetBillingModeForGroup(info.OriginModelName, info.UsingGroup) == billing_setting.BillingModeTieredExpr {
 		return modelPriceHelperTiered(c, info, promptTokens, meta, groupRatioInfo)
 	}
 
@@ -239,7 +255,7 @@ func HasModelBillingConfig(modelName string) bool {
 }
 
 func modelPriceHelperTiered(c *gin.Context, info *relaycommon.RelayInfo, promptTokens int, meta *types.TokenCountMeta, groupRatioInfo types.GroupRatioInfo) (types.PriceData, error) {
-	exprStr, ok := billing_setting.GetBillingExpr(info.OriginModelName)
+	exprStr, ok := billing_setting.GetBillingExprForGroup(info.OriginModelName, info.UsingGroup)
 	if !ok {
 		return types.PriceData{}, fmt.Errorf("model %s is configured as tiered_expr but has no billing expression", info.OriginModelName)
 	}

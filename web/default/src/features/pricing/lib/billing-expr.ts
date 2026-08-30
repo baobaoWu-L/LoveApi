@@ -240,6 +240,23 @@ export type ParsedTier = {
   [field: string]: unknown
 }
 
+function complementTierCondition(condition: TierCondition): TierCondition {
+  const opposite: Record<TierCondition['op'], TierCondition['op']> = {
+    '<': '>=', '<=': '>', '>': '<=', '>=': '<',
+  }
+  return { ...condition, op: opposite[condition.op] }
+}
+
+/** Human-readable context hint shown beside tier labels. */
+export function formatTierConditionHint(tier: ParsedTier): string {
+  return (tier.conditions || []).map((condition) => {
+    const value = condition.value >= 1_000_000
+      ? `${condition.value / 1_000_000}M`
+      : `${condition.value / 1000}K`
+    return `${condition.var} ${condition.op} ${value}`
+  }).join(' && ')
+}
+
 // ---------------------------------------------------------------------------
 // Tier parser
 // ---------------------------------------------------------------------------
@@ -297,6 +314,9 @@ export function parseTiersFromExpr(exprStr: string): ParsedTier[] {
       tier.label = m[2]
       tier.conditions = conditions
       tiers.push(tier)
+    }
+    if (tiers.length === 2 && tiers[0].conditions.length === 1 && tiers[1].conditions.length === 0) {
+      tiers[1].conditions = [complementTierCondition(tiers[0].conditions[0])]
     }
     return tiers
   } catch {

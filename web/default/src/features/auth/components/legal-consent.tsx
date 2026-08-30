@@ -24,8 +24,12 @@ import type { SystemStatus } from '../types'
 
 interface LegalConsentProps {
   status: SystemStatus | null
-  checked: boolean
-  onCheckedChange: (nextValue: boolean) => void
+  checked?: boolean
+  onCheckedChange?: (nextValue: boolean) => void
+  agreementChecked?: boolean
+  privacyChecked?: boolean
+  onAgreementChange?: (nextValue: boolean) => void
+  onPrivacyChange?: (nextValue: boolean) => void
   className?: string
 }
 
@@ -33,6 +37,10 @@ export function LegalConsent({
   status,
   checked,
   onCheckedChange,
+  agreementChecked,
+  privacyChecked,
+  onAgreementChange,
+  onPrivacyChange,
   className,
 }: LegalConsentProps) {
   const { t } = useTranslation()
@@ -43,8 +51,53 @@ export function LegalConsent({
     return null
   }
 
+  const isSeparate =
+    agreementChecked !== undefined &&
+    privacyChecked !== undefined &&
+    onAgreementChange &&
+    onPrivacyChange
+
+  if (isSeparate) {
+    return (
+      <div className={cn('border-border/60 bg-muted/40 space-y-3 rounded-md border p-3', className)}>
+        {hasUserAgreement && (
+          <div className='flex items-start gap-3'>
+            <Checkbox
+              id='legal-user-agreement'
+              checked={agreementChecked}
+              onCheckedChange={(value) => onAgreementChange(value === true)}
+              className='mt-0.5'
+            />
+            <Label htmlFor='legal-user-agreement' className='text-muted-foreground text-left text-xs leading-5 font-normal'>
+              {t('I have read and agree to the')}{' '}
+              <a href='/user-agreement' target='_blank' rel='noopener noreferrer' className='text-foreground/70 hover:text-foreground underline'>
+                {t('User Agreement')}
+              </a>
+            </Label>
+          </div>
+        )}
+        {hasPrivacyPolicy && (
+          <div className='flex items-start gap-3'>
+            <Checkbox
+              id='legal-privacy-policy'
+              checked={privacyChecked}
+              onCheckedChange={(value) => onPrivacyChange(value === true)}
+              className='mt-0.5'
+            />
+            <Label htmlFor='legal-privacy-policy' className='text-muted-foreground text-left text-xs leading-5 font-normal'>
+              {t('I have read and agree to the')}{' '}
+              <a href='/privacy-policy' target='_blank' rel='noopener noreferrer' className='text-foreground/70 hover:text-foreground underline'>
+                {t('Privacy Policy')}
+              </a>
+            </Label>
+          </div>
+        )}
+      </div>
+    )
+  }
+
   const handleChange = (value: boolean) => {
-    onCheckedChange(value === true)
+    onCheckedChange?.(value === true)
   }
 
   return (

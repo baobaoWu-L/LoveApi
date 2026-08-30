@@ -138,19 +138,12 @@ func GetBoundChannelsByModelsMap(modelNames []string) (map[string][]BoundChannel
 // SyncPricingToModelMeta reads all model names from pricing config and creates
 // model_meta records for any that don't already exist. Returns the count of new records.
 func SyncPricingToModelMeta() (int, error) {
-	pricings := GetPricing()
-	if len(pricings) == 0 {
+	// Use enabled channel abilities as the source. Pricing intentionally only
+	// exposes models that already have metadata, so using GetPricing here would
+	// create a circular dependency and prevent new models from being added.
+	pricingNames := GetEnabledModels()
+	if len(pricingNames) == 0 {
 		return 0, nil
-	}
-
-	// Collect all model names from pricing
-	pricingNames := make([]string, 0, len(pricings))
-	seen := make(map[string]struct{})
-	for _, p := range pricings {
-		if _, ok := seen[p.ModelName]; !ok {
-			seen[p.ModelName] = struct{}{}
-			pricingNames = append(pricingNames, p.ModelName)
-		}
 	}
 
 	// Find which already exist in model_meta
@@ -181,11 +174,11 @@ func SyncPricingToModelMeta() (int, error) {
 			continue
 		}
 		m := Model{
-			ModelName:   name,
-			Status:      1,
+			ModelName:    name,
+			Status:       1,
 			SyncOfficial: 0,
-			CreatedTime: now,
-			UpdatedTime: now,
+			CreatedTime:  now,
+			UpdatedTime:  now,
 		}
 		if err := DB.Create(&m).Error; err != nil {
 			// Skip duplicates (race condition)

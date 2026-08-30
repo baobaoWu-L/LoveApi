@@ -239,6 +239,21 @@ export interface UserWalletData {
   group: string
 }
 
+/** Administrator-only aggregate of configured upstream channel accounts. */
+export interface UpstreamBalanceSummary {
+  /** Authoritative upstream account balance in USD. */
+  balance_usd: number
+  /** Authoritative upstream account spend in USD. */
+  used_usd: number
+  balance: number
+  used_quota: number
+  request_count: number
+  channel_count: number
+  updated_channel_count: number
+  failed_channel_count: number
+  updated_at: number
+}
+
 /**
  * Topup record status
  */

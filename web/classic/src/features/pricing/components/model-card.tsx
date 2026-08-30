@@ -19,6 +19,7 @@ For commercial licensing, please contact support@quantumnous.com
 import { memo } from 'react'
 import { ChevronRight, Copy } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import { formatBillingCurrencyFromUSD } from '@/lib/currency'
 import { getLobeIcon } from '@/lib/lobe-icon'
 import { cn } from '@/lib/utils'
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard'
@@ -28,6 +29,7 @@ import {
   getDynamicDisplayGroupRatio,
   getDynamicGroupRatio,
   getDynamicPricingSummary,
+  isDynamicPricingModel,
 } from '../lib/dynamic-price'
 import { parseTags } from '../lib/filters'
 import { isTokenBasedModel } from '../lib/model-helpers'
@@ -51,6 +53,17 @@ export interface ModelCardProps {
   perf?: ModelPerfBadgeData
 }
 
+const REQUEST_TIER_ORDER = [
+  'request',
+  '1k',
+  '2k',
+  '4k',
+  'input_image',
+  'input_video_second',
+  '480p_second',
+  '720p_second',
+]
+
 export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
   const { t } = useTranslation()
   const { copyToClipboard } = useCopyToClipboard()
@@ -71,10 +84,15 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
     ? getLobeIcon(props.model.vendor_icon, 28)
     : null
   const initial = props.model.model_name?.charAt(0).toUpperCase() || '?'
-  const isDynamicPricing =
-    props.model.billing_mode === 'tiered_expr' &&
-    Boolean(props.model.billing_expr)
+  const isDynamicPricing = isDynamicPricingModel(props.model)
   const hasCachedPrice = isTokenBased && props.model.cache_ratio != null
+  const requestTierLabels: Record<string, string> = {
+    request: t('Per request'),
+    input_image: t('Input image'),
+    input_video_second: t('Input video / second'),
+    '480p_second': t('480p / second'),
+    '720p_second': t('720p / second'),
+  }
   const dynamicSummary = isDynamicPricing
     ? getDynamicPricingSummary(props.model, {
         tokenUnit,
@@ -230,25 +248,39 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
                   )}
                 </>
               ) : (
-                <span className='text-muted-foreground whitespace-nowrap'>
-                  <span className='text-foreground font-mono font-semibold'>
-                    {selectedGroup
-                      ? formatFixedPrice(
-                          props.model,
-                          selectedGroup,
-                          showRechargePrice,
-                          priceRate,
-                          usdExchangeRate,
-                          props.model.group_ratio || {}
-                        )
-                      : formatRequestPrice(
-                          props.model,
-                          showRechargePrice,
-                          priceRate,
-                          usdExchangeRate
-                        )}
-                  </span>{' '}
-                  / {t('request')}
+                <span className='text-muted-foreground flex flex-wrap gap-x-2 gap-y-0.5'>
+                  {props.model.request_pricing ? (
+                    Object.entries(props.model.request_pricing)
+                      .sort(
+                        ([a], [b]) =>
+                          REQUEST_TIER_ORDER.indexOf(a) -
+                          REQUEST_TIER_ORDER.indexOf(b)
+                      )
+                      .map(([tier, price]) => (
+                        <span key={tier} className='whitespace-nowrap'>
+                          <span className='text-muted-foreground'>
+                            {requestTierLabels[tier] ?? tier.toUpperCase()}{' '}
+                          </span>
+                          <span className='text-foreground font-mono font-semibold'>
+                            {formatBillingCurrencyFromUSD(
+                              showRechargePrice
+                                ? (price * priceRate) / usdExchangeRate
+                                : price,
+                              { digitsLarge: 4, digitsSmall: 6, abbreviate: false }
+                            )}
+                          </span>
+                        </span>
+                      ))
+                  ) : (
+                    <>
+                      <span className='text-foreground font-mono font-semibold'>
+                        {selectedGroup
+                          ? formatFixedPrice(props.model, selectedGroup, showRechargePrice, priceRate, usdExchangeRate, props.model.group_ratio || {})
+                          : formatRequestPrice(props.model, showRechargePrice, priceRate, usdExchangeRate)}
+                      </span>{' '}
+                      / {t('request')}
+                    </>
+                  )}
                 </span>
               )}
             </div>

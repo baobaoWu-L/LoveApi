@@ -149,6 +149,7 @@ export function ApiKeysMutateDrawer({
       label: key,
       desc: info.desc || key,
       ratio: info.ratio,
+      models: info.models || [],
     })
   )
   const backendHasAuto = groups.some((g) => g.value === 'auto')

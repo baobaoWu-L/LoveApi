@@ -1,12 +1,15 @@
 package controller
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"strconv"
+	"strings"
+	"sync"
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
@@ -451,34 +454,61 @@ func UpdateChannelBalance(c *gin.Context) {
 	})
 }
 
-func updateAllChannelsBalance() error {
+func syncChannelsBalance() (map[int]bool, error) {
 	channels, err := model.GetAllChannels(0, 0, true, false)
 	if err != nil {
-		return err
+		return nil, err
 	}
+	updated := make(map[int]bool)
+	eligible := make([]*model.Channel, 0, len(channels))
 	for _, channel := range channels {
-		if channel.Status != common.ChannelStatusEnabled {
-			continue
+		if channel.Status == common.ChannelStatusEnabled && !channel.ChannelInfo.IsMultiKey {
+			eligible = append(eligible, channel)
 		}
-		if channel.ChannelInfo.IsMultiKey {
-			continue // skip multi-key channels
-		}
-		// TODO: support Azure
-		//if channel.Type != common.ChannelTypeOpenAI && channel.Type != common.ChannelTypeCustom {
-		//	continue
-		//}
-		balance, err := updateChannelBalance(channel)
-		if err != nil {
-			continue
-		} else {
-			// err is nil & balance <= 0 means quota is used up
-			if balance <= 0 {
-				service.DisableChannel(*types.NewChannelError(channel.Id, channel.Type, channel.Name, channel.ChannelInfo.IsMultiKey, "", channel.GetAutoBan()), "余额不足")
-			}
-		}
-		time.Sleep(common.RequestInterval)
 	}
-	return nil
+
+	// Balance checks are independent network requests. A bounded worker pool
+	// prevents one slow provider from blocking the entire wallet request while
+	// avoiding an unbounded burst against upstreams.
+	workerCount := 8
+	if len(eligible) < workerCount {
+		workerCount = len(eligible)
+	}
+	if workerCount == 0 {
+		return updated, nil
+	}
+	jobs := make(chan *model.Channel)
+	var wg sync.WaitGroup
+	var updatedMu sync.Mutex
+	for i := 0; i < workerCount; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for channel := range jobs {
+				balance, updateErr := updateChannelBalance(channel)
+				if updateErr != nil {
+					continue
+				}
+				updatedMu.Lock()
+				updated[channel.Id] = true
+				updatedMu.Unlock()
+				if balance <= 0 {
+					service.DisableChannel(*types.NewChannelError(channel.Id, channel.Type, channel.Name, channel.ChannelInfo.IsMultiKey, "", channel.GetAutoBan()), "余额不足")
+				}
+			}
+		}()
+	}
+	for _, channel := range eligible {
+		jobs <- channel
+	}
+	close(jobs)
+	wg.Wait()
+	return updated, nil
+}
+
+func updateAllChannelsBalance() error {
+	_, err := syncChannelsBalance()
+	return err
 }
 
 func UpdateAllChannelsBalance(c *gin.Context) {
@@ -493,6 +523,150 @@ func UpdateAllChannelsBalance(c *gin.Context) {
 		"message": "",
 	})
 	return
+}
+
+// UpstreamBalanceSummary is the administrator-facing snapshot returned by the
+// upstream account API. Dollar values are never derived from local quota.
+type UpstreamBalanceSummary struct {
+	BalanceUSD          float64 `json:"balance_usd"`
+	UsedUSD             float64 `json:"used_usd"`
+	Balance             float64 `json:"balance"`
+	UsedQuota           int64   `json:"used_quota"`
+	RequestCount        int64   `json:"request_count"`
+	ChannelCount        int     `json:"channel_count"`
+	UpdatedChannelCount int     `json:"updated_channel_count"`
+	FailedChannelCount  int     `json:"failed_channel_count"`
+	UpdatedAt           int64   `json:"updated_at"`
+}
+
+const upstreamAccountStatsOption = "SuperAIAccountStats"
+
+func loadPersistedUpstreamAccountStats() (UpstreamBalanceSummary, bool) {
+	common.OptionMapRWMutex.RLock()
+	raw := common.OptionMap[upstreamAccountStatsOption]
+	common.OptionMapRWMutex.RUnlock()
+	if strings.TrimSpace(raw) == "" {
+		return UpstreamBalanceSummary{}, false
+	}
+	var summary UpstreamBalanceSummary
+	if err := common.UnmarshalJsonStr(raw, &summary); err != nil || summary.UpdatedAt == 0 {
+		return UpstreamBalanceSummary{}, false
+	}
+	return summary, true
+}
+
+func persistUpstreamAccountStats(summary UpstreamBalanceSummary) {
+	if raw, err := common.Marshal(summary); err == nil {
+		if err = model.UpdateOption(upstreamAccountStatsOption, string(raw)); err != nil {
+			common.SysLog("failed to persist upstream account stats: " + err.Error())
+		}
+	}
+}
+
+func upstreamNumber(v any) (float64, bool) {
+	switch n := v.(type) {
+	case float64:
+		return n, true
+	case int:
+		return float64(n), true
+	case int64:
+		return float64(n), true
+	case string:
+		f, err := strconv.ParseFloat(strings.TrimSpace(n), 64)
+		return f, err == nil
+	default:
+		return 0, false
+	}
+}
+
+func fetchSuperAIAccountStats(ctx context.Context) (UpstreamBalanceSummary, error) {
+	url := strings.TrimRight(common.GetEnvOrDefaultString("SUPERAI_ACCOUNT_API_URL", "https://superaiapi.com/api/user/self"), "/")
+	token := strings.TrimSpace(common.GetEnvOrDefaultString("SUPERAI_ACCOUNT_API_TOKEN", ""))
+	if token == "" {
+		token = strings.TrimSpace(common.GetEnvOrDefaultString("SUPERAI_PRICING_API_TOKEN", ""))
+	}
+	userID := strings.TrimSpace(common.GetEnvOrDefaultString("SUPERAI_ACCOUNT_USER_ID", ""))
+	if token == "" || userID == "" {
+		return UpstreamBalanceSummary{}, errors.New("未配置 SuperAI 账户令牌或用户 ID（SUPERAI_ACCOUNT_API_TOKEN、SUPERAI_ACCOUNT_USER_ID）")
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return UpstreamBalanceSummary{}, err
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("New-Api-User", userID)
+	resp, err := newHTTPClient().Do(req)
+	if err != nil {
+		return UpstreamBalanceSummary{}, err
+	}
+	defer resp.Body.Close()
+	var envelope map[string]any
+	if err = common.DecodeJson(resp.Body, &envelope); err != nil {
+		return UpstreamBalanceSummary{}, err
+	}
+	if resp.StatusCode != http.StatusOK {
+		message, _ := envelope["message"].(string)
+		if message == "" {
+			message = resp.Status
+		}
+		return UpstreamBalanceSummary{}, fmt.Errorf("上游账户接口失败: %s", message)
+	}
+	if success, ok := envelope["success"].(bool); ok && !success {
+		message, _ := envelope["message"].(string)
+		return UpstreamBalanceSummary{}, fmt.Errorf("上游账户接口失败: %s", message)
+	}
+	data, _ := envelope["data"].(map[string]any)
+	if data == nil {
+		data = envelope
+	}
+	read := func(keys ...string) (float64, bool) {
+		for _, key := range keys {
+			if value, ok := upstreamNumber(data[key]); ok {
+				return value, true
+			}
+		}
+		return 0, false
+	}
+	balance, balanceOK := read("balance_usd", "balanceUSD", "balance")
+	used, usedOK := read("used_usd", "usedUSD", "used")
+	if !balanceOK {
+		if quota, ok := read("quota"); ok {
+			balance, balanceOK = quota/common.QuotaPerUnit, true
+		}
+	}
+	if !usedOK {
+		if quota, ok := read("used_quota"); ok {
+			used, usedOK = quota/common.QuotaPerUnit, true
+		}
+	}
+	if !balanceOK || !usedOK {
+		return UpstreamBalanceSummary{}, errors.New("上游账户响应未包含余额字段")
+	}
+	requests, _ := read("request_count", "requestCount", "requests")
+	return UpstreamBalanceSummary{BalanceUSD: balance, UsedUSD: used, RequestCount: int64(requests), UpdatedAt: common.GetTimestamp()}, nil
+}
+
+// GetUpstreamBalanceSummary synchronizes enabled single-key channels and
+// returns an aggregate suitable for the administrator wallet dashboard.
+// It is intentionally protected by the channel route's AdminAuth middleware.
+func GetUpstreamBalanceSummary(c *gin.Context) {
+	// Prefer the authoritative SuperAI account totals. Keep the last successful
+	// snapshot in the options table so page navigation/reload does not erase it.
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 15*time.Second)
+	defer cancel()
+	if account, accountErr := fetchSuperAIAccountStats(ctx); accountErr == nil {
+		persistUpstreamAccountStats(account)
+		c.JSON(http.StatusOK, gin.H{"success": true, "message": "", "data": account})
+		return
+	} else if cached, ok := loadPersistedUpstreamAccountStats(); ok {
+		c.JSON(http.StatusOK, gin.H{"success": true, "message": "上游暂时不可用，显示上次同步结果", "data": cached})
+		return
+	}
+
+	c.JSON(http.StatusBadGateway, gin.H{
+		"success": false,
+		"message": "无法获取上游美元账户余额，请配置 SUPERAI_ACCOUNT_API_TOKEN 和 SUPERAI_ACCOUNT_USER_ID",
+	})
 }
 
 func AutomaticallyUpdateChannels(frequency int) {

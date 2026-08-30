@@ -96,11 +96,14 @@ const extendedModelFormSchema = z.object({
   imageRatio: z.string().optional(),
   audioRatio: z.string().optional(),
   audioCompletionRatio: z.string().optional(),
+  billingMode: z.string().optional(),
+  billingExpr: z.string().optional(),
+  billingGroup: z.string().optional(),
 })
 
 type ExtendedModelFormValues = z.infer<typeof extendedModelFormSchema>
 
-type PricingMode = 'per-token' | 'per-request'
+type PricingMode = 'per-token' | 'per-request' | 'tiered'
 type PricingSubMode = 'ratio' | 'price'
 
 type ModelMutateDrawerProps = {
@@ -176,6 +179,8 @@ export function ModelMutateDrawer({
       ExposeRatioEnabled: false,
       'billing_setting.billing_mode': '{}',
       'billing_setting.billing_expr': '{}',
+      'billing_setting.billing_mode_by_group': '{}',
+      'billing_setting.billing_expr_by_group': '{}',
       'tool_price_setting.prices': '{}',
       TopupGroupRatio: '',
       GroupRatio: '',
@@ -198,6 +203,14 @@ export function ModelMutateDrawer({
     return getOptionValue(systemOptionsData.data, defaultModelSettings)
   }, [systemOptionsData])
 
+  const billingGroups = useMemo(() => {
+    if (!modelSettings?.GroupRatio) return []
+    const groups = safeJsonParse<Record<string, number>>(modelSettings.GroupRatio, {
+      fallback: {}, silent: true,
+    })
+    return Object.keys(groups)
+  }, [modelSettings])
+
   const form = useForm<ExtendedModelFormValues>({
     resolver: zodResolver(extendedModelFormSchema),
     defaultValues: {
@@ -217,6 +230,9 @@ export function ModelMutateDrawer({
       imageRatio: '',
       audioRatio: '',
       audioCompletionRatio: '',
+      billingMode: '',
+      billingExpr: '',
+      billingGroup: '',
     },
   })
 
@@ -276,6 +292,8 @@ export function ModelMutateDrawer({
         imageRatio: '',
         audioRatio: '',
         audioCompletionRatio: '',
+        billingMode: '',
+        billingExpr: '',
       }
 
       // Parse ratio configurations from system settings if available
@@ -308,6 +326,21 @@ export function ModelMutateDrawer({
           modelSettings.AudioCompletionRatio,
           { fallback: {}, silent: true }
         )
+        const billingModeMap = safeJsonParse<Record<string, string>>(
+          modelSettings['billing_setting.billing_mode'],
+          { fallback: {}, silent: true }
+        )
+        const billingModeByGroupMap = safeJsonParse<Record<string, Record<string, string>>>(
+          modelSettings['billing_setting.billing_mode_by_group'], { fallback: {}, silent: true }
+        )
+        const billingExprMap = safeJsonParse<Record<string, string>>(
+          modelSettings['billing_setting.billing_expr'],
+          { fallback: {}, silent: true }
+        )
+        const billingExprByGroupMap = safeJsonParse<Record<string, Record<string, string>>>(
+          modelSettings['billing_setting.billing_expr_by_group'],
+          { fallback: {}, silent: true }
+        )
 
         // Extract ratio config for this model
         const modelName = model.model_name
@@ -318,9 +351,23 @@ export function ModelMutateDrawer({
         const imageRatio = imageMap[modelName]
         const audioRatio = audioMap[modelName]
         const audioCompletionRatio = audioCompletionMap[modelName]
+        const configuredBillingMode = billingModeMap[modelName] || ''
+        const configuredBillingExpr = billingExprMap[modelName] || ''
+        const configuredGroups = billingExprByGroupMap[modelName] || {}
+        const configuredModeGroups = billingModeByGroupMap[modelName] || {}
+        const configuredBillingGroup = Object.keys(configuredGroups)[0] || ''
+        const configuredGroupExpr = configuredGroups[configuredBillingGroup] || ''
 
         // Determine pricing mode
-        if (price !== undefined && price !== null) {
+        if ((configuredBillingMode === 'tiered_expr' || Object.values(configuredModeGroups).includes('tiered_expr')) && (configuredBillingExpr || configuredGroupExpr)) {
+          setPricingMode('tiered')
+          form.reset({
+            ...baseModelData,
+            billingMode: 'tiered_expr',
+            billingExpr: configuredGroupExpr || configuredBillingExpr,
+            billingGroup: configuredBillingGroup || billingGroups[0] || '',
+          })
+        } else if (price !== undefined && price !== null) {
           setPricingMode('per-request')
           form.reset({
             ...baseModelData,
@@ -380,6 +427,9 @@ export function ModelMutateDrawer({
         imageRatio: '',
         audioRatio: '',
         audioCompletionRatio: '',
+        billingMode: '',
+        billingExpr: '',
+        billingGroup: '',
       })
     }
   }, [open, isEditing, modelData, currentRow, form, modelSettings])
@@ -405,6 +455,9 @@ export function ModelMutateDrawer({
           imageRatio,
           audioRatio,
           audioCompletionRatio,
+          billingMode: _billingMode,
+          billingExpr: _billingExpr,
+          billingGroup: _billingGroup,
           ...modelData
         } = submitData
 
@@ -416,6 +469,7 @@ export function ModelMutateDrawer({
           // Handle ratio configuration updates in system settings
           const finalModelName = values.model_name
           const hasRatioConfig =
+            (pricingMode === 'tiered' && values.billingExpr && values.billingExpr.trim() !== '') ||
             (pricingMode === 'per-request' &&
               values.price &&
               values.price !== '') ||
@@ -459,6 +513,22 @@ export function ModelMutateDrawer({
               modelSettings.AudioCompletionRatio,
               { fallback: {}, silent: true }
             )
+            const billingModeMap = safeJsonParse<Record<string, string>>(
+              modelSettings['billing_setting.billing_mode'],
+              { fallback: {}, silent: true }
+            )
+            const billingExprMap = safeJsonParse<Record<string, string>>(
+              modelSettings['billing_setting.billing_expr'],
+              { fallback: {}, silent: true }
+            )
+            const billingModeByGroupMap = safeJsonParse<Record<string, Record<string, string>>>(
+              modelSettings['billing_setting.billing_mode_by_group'],
+              { fallback: {}, silent: true }
+            )
+            const billingExprByGroupMap = safeJsonParse<Record<string, Record<string, string>>>(
+              modelSettings['billing_setting.billing_expr_by_group'],
+              { fallback: {}, silent: true }
+            )
 
             // Remove old model name entries if model name changed (always, even if no new config)
             if (isEditing && oldModelName && oldModelName !== finalModelName) {
@@ -469,6 +539,10 @@ export function ModelMutateDrawer({
               delete imageMap[oldModelName]
               delete audioMap[oldModelName]
               delete audioCompletionMap[oldModelName]
+              delete billingModeMap[oldModelName]
+              delete billingExprMap[oldModelName]
+              delete billingModeByGroupMap[oldModelName]
+              delete billingExprByGroupMap[oldModelName]
             }
 
             // Remove current model name from all maps first (always, to handle mode switches or clearing)
@@ -480,10 +554,31 @@ export function ModelMutateDrawer({
             delete imageMap[finalModelName]
             delete audioMap[finalModelName]
             delete audioCompletionMap[finalModelName]
+            delete billingModeMap[finalModelName]
+            delete billingExprMap[finalModelName]
+            if (pricingMode !== 'tiered') {
+              delete billingModeByGroupMap[finalModelName]
+              delete billingExprByGroupMap[finalModelName]
+            }
 
             // Only add new entries if user provided new configuration
             if (hasRatioConfig) {
-              if (
+              if (pricingMode === 'tiered' && values.billingExpr?.trim()) {
+                const group = values.billingGroup?.trim()
+                if (group) {
+                  billingModeByGroupMap[finalModelName] = {
+                    ...(billingModeByGroupMap[finalModelName] || {}),
+                    [group]: 'tiered_expr',
+                  }
+                  billingExprByGroupMap[finalModelName] = {
+                    ...(billingExprByGroupMap[finalModelName] || {}),
+                    [group]: values.billingExpr.trim(),
+                  }
+                } else {
+                  billingModeMap[finalModelName] = 'tiered_expr'
+                  billingExprMap[finalModelName] = values.billingExpr.trim()
+                }
+              } else if (
                 pricingMode === 'per-request' &&
                 values.price &&
                 values.price !== ''
@@ -580,6 +675,43 @@ export function ModelMutateDrawer({
                 key: 'AudioCompletionRatio',
                 value: newAudioCompletionRatio,
               })
+            }
+
+            const newBillingMode = normalizeJsonString(
+              JSON.stringify(billingModeMap)
+            )
+            if (
+              newBillingMode !==
+              normalizeJsonString(
+                modelSettings['billing_setting.billing_mode']
+              )
+            ) {
+              updates.push({
+                key: 'billing_setting.billing_mode',
+                value: newBillingMode,
+              })
+            }
+            const newBillingExpr = normalizeJsonString(
+              JSON.stringify(billingExprMap)
+            )
+            if (
+              newBillingExpr !==
+              normalizeJsonString(
+                modelSettings['billing_setting.billing_expr']
+              )
+            ) {
+              updates.push({
+                key: 'billing_setting.billing_expr',
+                value: newBillingExpr,
+              })
+            }
+            const newBillingModeByGroup = normalizeJsonString(JSON.stringify(billingModeByGroupMap))
+            if (newBillingModeByGroup !== normalizeJsonString(modelSettings['billing_setting.billing_mode_by_group'])) {
+              updates.push({ key: 'billing_setting.billing_mode_by_group', value: newBillingModeByGroup })
+            }
+            const newBillingExprByGroup = normalizeJsonString(JSON.stringify(billingExprByGroupMap))
+            if (newBillingExprByGroup !== normalizeJsonString(modelSettings['billing_setting.billing_expr_by_group'])) {
+              updates.push({ key: 'billing_setting.billing_expr_by_group', value: newBillingExprByGroup })
             }
 
             // Apply all updates (including deletions when clearing fields)
@@ -913,10 +1045,61 @@ export function ModelMutateDrawer({
                       {t('Per-request (fixed price)')}
                     </Label>
                   </div>
+                  <div className='flex items-center space-x-2'>
+                    <RadioGroupItem value='tiered' id='tiered' />
+                    <Label htmlFor='tiered' className='font-normal'>
+                      {t('Context-tiered (expression, USD per 1M tokens)')}
+                    </Label>
+                  </div>
                 </RadioGroup>
               </div>
 
-              {pricingMode === 'per-request' ? (
+              {pricingMode === 'tiered' ? (
+                <div className='space-y-4'>
+                  <FormField
+                    control={form.control}
+                    name='billingGroup'
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>{t('Pricing group')}</FormLabel>
+                        <Select
+                          items={billingGroups.map((group) => ({ value: group, label: group }))}
+                          value={field.value || billingGroups[0] || ''}
+                          onValueChange={(value) => field.onChange(value || '')}
+                        >
+                          <FormControl><SelectTrigger><SelectValue placeholder={t('Select group')} /></SelectTrigger></FormControl>
+                          <SelectContent alignItemWithTrigger={false}>
+                            <SelectGroup>
+                              {billingGroups.map((group) => <SelectItem key={group} value={group}>{group}</SelectItem>)}
+                            </SelectGroup>
+                          </SelectContent>
+                        </Select>
+                        <FormDescription>{t('Save an independent expression for this model and group.')}</FormDescription>
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name='billingExpr'
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>{t('Context-tiered billing expression')}</FormLabel>
+                        <FormControl>
+                          <Textarea
+                            rows={5}
+                            placeholder={'len <= 200000 ? tier("standard", p * 1 + c * 6 + cr * 0.1) : tier("long_context", p * 2 + c * 12 + cr * 0.2)'}
+                            {...field}
+                          />
+                        </FormControl>
+                        <FormDescription>
+                          {t('Use real USD per 1M token prices. Use len for context thresholds; p, c, cr, cc are shown only when used.')}
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              ) : pricingMode === 'per-request' ? (
                 <FormField
                   control={form.control}
                   name='price'

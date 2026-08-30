@@ -251,6 +251,19 @@ export async function syncFromPricing(): Promise<{
 }
 
 /**
+ * 同步上游价格（按加价系数 ModelPriceMarkupFactor 重算国产大模型价格）
+ * 独立按钮，手动触发；后端：/api/models/recompute_prices
+ */
+export async function recomputePrices(): Promise<{
+  success: boolean
+  message?: string
+  data?: { updated: number; markup: number }
+}> {
+  const res = await api.post('/api/models/recompute_prices')
+  return res.data
+}
+
+/**
  * Get prefill groups
  */
 export async function getPrefillGroups(

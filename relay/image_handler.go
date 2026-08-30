@@ -118,11 +118,10 @@ func ImageHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *type
 		imageN = *request.N
 	}
 
-	// n is handled via OtherRatio so it is applied exactly once in quota
-	// calculation (both price-based and ratio-based paths).
-	// Adaptors may have already set a more accurate count from the
-	// upstream response; only set the default when they haven't.
-	if info.PriceData.UsePrice { // only price model use N ratio
+	// gpt-image-2 includes the requested count in ImagePriceRatio during
+	// pre-consume, so do not apply n again as an OtherRatio. Other image
+	// providers keep the legacy count multiplier behaviour.
+	if !strings.EqualFold(request.Model, "gpt-image-2") && info.PriceData.UsePrice {
 		if _, hasN := info.PriceData.OtherRatios["n"]; !hasN {
 			info.PriceData.AddOtherRatio("n", float64(imageN))
 		}
@@ -150,6 +149,29 @@ func ImageHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *type
 	}
 	if imageN > 0 {
 		logContent = append(logContent, fmt.Sprintf("生成数量 %d", imageN))
+	}
+	if unitPrice, ok := dto.ImagePriceUSD(request.Model, request.ResolutionTier()); ok {
+		tier := request.ResolutionTier()
+		if dto.IsFixedImageModel(request.Model) {
+			logContent = append(logContent, fmt.Sprintf("按次计费，单次价格 $%.3f，预计扣费 quota %.0f/次，共 %.0f quota",
+				unitPrice, unitPrice*common.QuotaPerUnit,
+				unitPrice*common.QuotaPerUnit*float64(imageN)))
+			tier = "request"
+		} else {
+			logContent = append(logContent, fmt.Sprintf("分辨率 %s，单张价格 $%.3f，预计扣费 quota %.0f/张，共 %.0f quota",
+				strings.ToUpper(tier), unitPrice, unitPrice*common.QuotaPerUnit,
+				unitPrice*common.QuotaPerUnit*float64(imageN)))
+		}
+		c.Set("image_billing_detail", map[string]interface{}{
+			"model":              request.Model,
+			"resolution_tier":    tier,
+			"unit_price_usd":     unitPrice,
+			"requested_images":   imageN,
+			"quota_per_image":    unitPrice * common.QuotaPerUnit,
+			"estimated_quota":    unitPrice * common.QuotaPerUnit * float64(imageN),
+			"group_multiplier":   info.PriceData.GroupRatioInfo.GroupRatio,
+			"multiplier_applied": false,
+		})
 	}
 
 	service.PostTextConsumeQuota(c, info, usage.(*dto.Usage), logContent)

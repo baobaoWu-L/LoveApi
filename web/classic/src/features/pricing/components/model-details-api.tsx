@@ -258,25 +258,30 @@ function buildGeminiSample(lang: Lang, ctx: SampleContext): string {
   }
   if (lang === 'python') {
     return [
-      'import google.generativeai as genai',
+      'import requests',
       '',
-      `genai.configure(api_key="<YOUR_API_KEY>")`,
+      `url = "${url.replace(`$${ctx.apiKeyEnv}`, '<YOUR_API_KEY>')}"`,
       '',
-      `model = genai.GenerativeModel("${ctx.modelName}")`,
-      `response = model.generate_content("${userMessage}")`,
+      'response = requests.post(',
+      '    url,',
+      `    json={"contents": [{"parts": [{"text": "${userMessage}"}]}]},`,
+      '    timeout=120,',
+      ')',
       '',
-      `print(response.text)`,
+      'print(response.json())',
     ].join('\n')
   }
   if (lang === 'typescript') {
     return [
-      `import { GoogleGenerativeAI } from '@google/generative-ai'`,
+      `const url = \`${url.replace(`$${ctx.apiKeyEnv}`, '${process.env.' + ctx.apiKeyEnv + '}')}\``,
       '',
-      `const genAI = new GoogleGenerativeAI(process.env.${ctx.apiKeyEnv}!)`,
-      `const model = genAI.getGenerativeModel({ model: '${ctx.modelName}' })`,
+      `const response = await fetch(url, {`,
+      `  method: 'POST',`,
+      `  headers: { 'Content-Type': 'application/json' },`,
+      `  body: JSON.stringify({ contents: [{ parts: [{ text: '${userMessage}' }] }] }),`,
+      `})`,
       '',
-      `const result = await model.generateContent('${userMessage}')`,
-      `console.log(result.response.text())`,
+      `console.log(await response.json())`,
     ].join('\n')
   }
   return [
@@ -289,7 +294,7 @@ function buildGeminiSample(lang: Lang, ctx: SampleContext): string {
     `})`,
     '',
     `const data = await response.json()`,
-    `console.log(data.candidates[0].content.parts[0].text)`,
+    `console.log(data.candidates?.[0]?.content?.parts?.[0]?.text ?? data)`,
   ].join('\n')
 }
 
@@ -385,7 +390,7 @@ function buildImageSample(lang: Lang, ctx: SampleContext): string {
       `    n=1,`,
       ')',
       '',
-      'print(response.data[0].url)',
+      'print(response.data[0].url or response.data[0].b64_json)',
     ].join('\n')
   }
   if (lang === 'typescript') {
@@ -404,7 +409,7 @@ function buildImageSample(lang: Lang, ctx: SampleContext): string {
       `  n: 1,`,
       `})`,
       '',
-      `console.log(response.data[0].url)`,
+      `console.log(response.data[0].url ?? response.data[0].b64_json)`,
     ].join('\n')
   }
   return [
@@ -423,23 +428,51 @@ function buildImageSample(lang: Lang, ctx: SampleContext): string {
     `})`,
     '',
     `const data = await response.json()`,
-    `console.log(data.data[0].url)`,
+    `console.log(data.data[0].url ?? data.data[0].b64_json)`,
   ].join('\n')
 }
 
 function buildOpenAIResponseSample(lang: Lang, ctx: SampleContext): string {
   const url = `${ctx.baseUrl}${ctx.endpointPath}`
-  const body = JSON.stringify(
-    { model: ctx.modelName, input: 'Explain quantum entanglement in one paragraph.' },
-    null,
-    2
-  )
+  const input = 'Explain quantum entanglement in one paragraph.'
+  const body = JSON.stringify({ model: ctx.modelName, input }, null, 2)
   if (lang === 'curl') {
     return [
       `curl ${url} \\`,
       `  -H "Authorization: Bearer $${ctx.apiKeyEnv}" \\`,
       `  -H "Content-Type: application/json" \\`,
       `  -d '${body.replace(/\n/g, '\n     ')}'`,
+    ].join('\n')
+  }
+  if (lang === 'python') {
+    return [
+      'from openai import OpenAI',
+      '',
+      `client = OpenAI(base_url="${ctx.baseUrl}/v1", api_key="<YOUR_API_KEY>")`,
+      '',
+      'response = client.responses.create(',
+      `    model="${ctx.modelName}",`,
+      `    input="${input}",`,
+      ')',
+      '',
+      'print(response.output_text)',
+    ].join('\n')
+  }
+  if (lang === 'typescript') {
+    return [
+      `import OpenAI from 'openai'`,
+      '',
+      'const client = new OpenAI({',
+      `  baseURL: '${ctx.baseUrl}/v1',`,
+      `  apiKey: process.env.${ctx.apiKeyEnv},`,
+      '})',
+      '',
+      'const response = await client.responses.create({',
+      `  model: '${ctx.modelName}',`,
+      `  input: '${input}',`,
+      '})',
+      '',
+      'console.log(response.output_text)',
     ].join('\n')
   }
   return [
@@ -470,50 +503,62 @@ function protoPath(
   return p
 }
 
-// 按该平台（superaiapi）每个模型真实支持的协议返回，平台系列模型不支持 anthropic。
+// 按模型真实支持的协议返回：读取后端 supported_endpoint_types 驱动。
+// 这样「支持 openai 的只显示 openai，支持 openai+anthropic 的显示两个」与后端完全一致。
+// 若后端未配置端点（空数组），回退到垫出 OpenAI 聊天端点。
+const FALLBACK_PATH: Record<string, string> = {
+  openai: '/v1/chat/completions',
+  'openai-response': '/v1/responses',
+  anthropic: '/v1/messages',
+  gemini: '/v1beta/models/{model}:generateContent',
+  'image-generation': '/v1/images/generations',
+  'images-edits': '/v1/images/edits',
+  embeddings: '/v1/embeddings',
+  'jina-rerank': '/v1/rerank',
+  'openai-video': '/v1/videos',
+}
+
+const ENDPOINT_ORDER: string[] = [
+  'openai',
+  'anthropic',
+  'openai-response',
+  'gemini',
+  'image-generation',
+  'images-edits',
+  'embeddings',
+  'jina-rerank',
+  'openai-video',
+]
+
 function resolveModelProtocols(
-  modelName: string,
+  model: PricingModel,
   endpointMap: Record<string, { path?: string; method?: string }>
 ): { type: string; path: string }[] {
-  const n = modelName.toLowerCase()
-  const chat = {
-    type: 'openai',
-    path: protoPath(endpointMap, 'openai', '/v1/chat/completions', modelName),
+  const declaredTypes = model.supported_endpoint_types ?? []
+  const modelName = model.model_name || ''
+  const types = declaredTypes
+  // 没有后端声明时不生成示例，避免展示无法确认的虚拟端点。
+  if (types.length === 0) {
+    return []
   }
-  if (n.startsWith('gemini')) {
-    return [
-      chat,
-      {
-        type: 'gemini',
-        path: protoPath(endpointMap, 'gemini', '/v1beta/models', modelName),
-      },
-    ]
-  }
-  if (n === 'gpt-5.4') {
-    return [
-      {
-        type: 'openai-response',
-        path: protoPath(endpointMap, 'openai-response', '/v1/responses', modelName),
-      },
-    ]
-  }
-  if (n === 'gpt-5.4-mini' || n === 'gpt-5.5') {
-    return [
-      {
-        type: 'openai-response',
-        path: protoPath(endpointMap, 'openai-response', '/v1/responses', modelName),
-      },
-      chat,
-    ]
-  }
-  if (n === 'gpt-image-2') {
-    return [
-      { type: 'images-edits', path: '/v1/images/edits' },
-      { type: 'image-generation', path: '/v1/images/generations' },
-    ]
-  }
-  // 其余模型（MiniMax/qwen/deepseek/kimi/glm/claude/gpt-5.6 等）统一走 OpenAI 兼容
-  return [chat]
+  return ENDPOINT_ORDER.filter((t) => types.includes(t)).map((t) => ({
+    type: t,
+    path: protoPath(
+      endpointMap,
+      t,
+      FALLBACK_PATH[t] ?? '/v1/chat/completions',
+      modelName
+    ),
+  }))
+}
+
+function buildVideoSample(lang: Lang, ctx: SampleContext): string {
+  const url = `${ctx.baseUrl}${ctx.endpointPath}`
+  const body = JSON.stringify({ model: ctx.modelName, prompt: 'A cinematic sunset over the ocean', seconds: '5', size: '1280x720' }, null, 2)
+  if (lang === 'curl') return `curl ${url} -H "Authorization: Bearer $${ctx.apiKeyEnv}" -H "Content-Type: application/json" -d '${body}'`
+  if (lang === 'python') return ['from openai import OpenAI', '', `client = OpenAI(base_url="${ctx.baseUrl}/v1", api_key="<YOUR_API_KEY>")`, '', 'video = client.videos.create(', `    model="${ctx.modelName}",`, '    prompt="A cinematic sunset over the ocean",', '    seconds="5",', '    size="1280x720",', ')', '', 'print(video.id)'].join('\n')
+  if (lang === 'typescript') return [`import OpenAI from 'openai'`, '', `const client = new OpenAI({ baseURL: '${ctx.baseUrl}/v1', apiKey: process.env.${ctx.apiKeyEnv} })`, '', `const video = await client.videos.create({ model: '${ctx.modelName}', prompt: 'A cinematic sunset over the ocean', seconds: '5', size: '1280x720' })`, 'console.log(video.id)'].join('\n')
+  return [`const response = await fetch('${url}', {`, "  method: 'POST',", '  headers: {', `    Authorization: \`Bearer \${process.env.${ctx.apiKeyEnv}}\`,` , "    'Content-Type': 'application/json',", '  },', `  body: JSON.stringify(${body}),`, '})', '', 'console.log(await response.json())'].join('\n')
 }
 
 function buildSample(
@@ -528,6 +573,7 @@ function buildSample(
     return buildEmbeddingSample(lang, ctx)
   if (endpointType === 'image-generation' || endpointType === 'images-edits')
     return buildImageSample(lang, ctx)
+  if (endpointType === 'openai-video') return buildVideoSample(lang, ctx)
   if (endpointType === 'anthropic') return buildAnthropicSample(lang, ctx) // 兼容保留，不作为可用协议展示
   return buildChatSample(lang, ctx)
 }
@@ -535,16 +581,86 @@ function buildSample(
 // cc-switch 供应商配置（开源切换器）：本质是切换不同供应商配置。
 // 切换供应商时会把该配置写入要生效的 CLI 配置文件（Claude Code / Codex 等）。
 // api = 本项目端点地址；key = 本项目接口密钥；model = 当前模型；remark 说明连接自己的后台。
+// 返回「供应商 JSON + Codex 完整 config.toml」，一次粘贴即可，避免用户二次复制。
 function buildCcSwitchSample(ctx: SampleContext): string {
-  return [
+  const m = ctx.modelName || 'gpt-5.6-sol'
+  const providerJson = [
     '{',
-    `  "name": "LoveApi-${ctx.modelName}",`,
+    `  "name": "LoveApi-${m}",`,
     `  "api": "${ctx.baseUrl}",`,
     `  "key": "<YOUR_API_KEY>",`,
-    `  "model": "${ctx.modelName}",`,
+    `  "model": "${m}",`,
     `  "remark": "连接自己的后台 (LoveApi)，切换后写入 Claude Code / Codex 等配置文件"`,
     '}',
   ].join('\n')
+
+  const codexToml = [
+    `model = "${m}"`,
+    `model_provider = "loveapi"`,
+    `model_reasoning_effort = "medium"`,
+    `review_model = "${m}"`,
+    `[agents]`,
+    `default_subagent_model = "${m}"`,
+    `default_subagent_reasoning_effort = "medium"`,
+    ``,
+    `[model_providers.loveapi]`,
+    `name = "Love API"`,
+    `base_url = "${ctx.baseUrl}/v1"`,
+    `wire_api = "responses"`,
+    `requires_openai_auth = true`,
+    ``,
+    `[profiles.loveapi]`,
+    `model = "${m}"`,
+    `model_provider = "loveapi"`,
+  ].join('\n')
+
+  return [
+    `# ① 供应商配置（粘贴到 cc-switch）`,
+    providerJson,
+    ``,
+    `# ② Codex 完整配置（粘贴到 ~/.codex/config.toml，用 codex -p loveapi 启动）`,
+    codexToml,
+  ].join('\n')
+}
+
+// ---------------------------------------------------------------------------
+// Codex subagent lock note
+// ---------------------------------------------------------------------------
+
+// Codex（ChatGPT 桌面端 / CLI）接入提示：主对话与子代理默认可能用不同模型。
+// 想让主对话 + 子模型都用同一个模型，就把下面配置写入 ~/.codex/config.toml 并用 codex -p loveapi 启动。
+function CodexSubagentNote(props: { modelName: string }) {
+  const m = props.modelName || 'gpt-5.6-sol'
+  const cfg = [
+    `model = "${m}"`,
+    `review_model = "${m}"`,
+    `[agents]`,
+    `default_subagent_model = "${m}"`,
+    ``,
+    `[profiles.loveapi]`,
+    `model = "${m}"`,
+    `model_provider = "loveapi"`,
+  ].join('\n')
+  return (
+    <div className='mt-3 rounded-lg border border-rose-300/70 bg-rose-50/70 p-3 text-xs leading-relaxed text-rose-700 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-300'>
+      <strong>⚠️ Codex（ChatGPT）接入注意：</strong>不加下面锁定配置时，<em>主对话</em>用的是你选择的模型，
+      但 Codex 的 agent 运行时会调用<em>子模型</em>，可能命中其它模型（具体情况请看 控制台 → 使用日志）。
+      想让主对话与子模型都用同一个模型（{m}），把下面这段配置写入{' '}
+      <code className='bg-muted rounded px-1 py-0.5 font-mono text-[10px]'>~/.codex/config.toml</code>{' '}
+      ，并用{' '}
+      <code className='bg-muted rounded px-1 py-0.5 font-mono text-[10px]'>codex -p loveapi</code>{' '}
+      启动：
+      <pre className='mt-2 overflow-x-auto rounded-md bg-rose-50 p-2 font-mono text-[11px] leading-relaxed text-rose-800 dark:bg-rose-950/40 dark:text-rose-100'>
+{cfg}
+      </pre>
+      <p className='text-rose-700/90 mt-2 dark:text-rose-300/90'>
+        可修改的地方：把上面的 {m} 全部替换成你选定的模型名即可（model、review_model、default_subagent_model、profiles.loveapi.model 四处要一致）。
+      </p>
+      <p className='text-rose-700/90 mt-2 dark:text-rose-300/90'>
+        扣费按实际调用的模型价格结算：选择高级模型不会按高级价格去扣低级模型的额度；调用哪个模型就按哪个模型的额度扣，请放心。
+      </p>
+    </div>
+  )
 }
 
 // ---------------------------------------------------------------------------
@@ -557,15 +673,12 @@ function CodeSamplesSection(props: {
 }) {
   const { t } = useTranslation()
 
-  // 中转站对外地址：所有代码示例都指向这个真实可接入的地址
+  // 中转站对外地址：管理端可能运行在 localhost，不能把管理端地址当 API 地址。
   const baseUrl = 'https://api.LoveFulfiller.cn'
 
   const endpoints = useMemo(() => {
-    // 按该平台每个模型真实支持的协议展示（不含 anthropic），并附 ccswitch 接入项
-    const protocols = resolveModelProtocols(
-      props.model.model_name || '',
-      props.endpointMap
-    )
+    // 按后端 supported_endpoint_types 真实展示协议，并附 ccswitch 一键接入项
+    const protocols = resolveModelProtocols(props.model, props.endpointMap)
     return [...protocols, { type: 'ccswitch', path: '' }]
   }, [props.model, props.endpointMap])
 
@@ -584,7 +697,7 @@ function CodeSamplesSection(props: {
 
   const code = buildSample(lang, activeEndpoint.type, {
     baseUrl,
-    apiKeyEnv: 'NEW_API_KEY',
+    apiKeyEnv: 'LoveApi_Key',
     modelName: props.model.model_name || '',
     endpointType: activeEndpoint.type,
     endpointPath: activeEndpoint.path,
@@ -639,6 +752,22 @@ function CodeSamplesSection(props: {
         </code>{' '}
         {t('with the API key from your token settings.')}
       </p>
+
+      {activeEndpoint.type === 'openai' && (
+        <p className='mt-2 rounded-md border border-sky-300/70 bg-sky-50/70 p-2.5 text-xs leading-relaxed text-sky-700 dark:border-sky-500/30 dark:bg-sky-500/10 dark:text-sky-300'>
+          ℹ️ 该模型走 <strong>OpenAI 兼容协议</strong>（{' '}
+          <code className='bg-muted rounded px-1 py-0.5 font-mono text-[10px]'>
+            {activeEndpoint.path}
+          </code>{' '}
+          ），可直接用 <code className='bg-muted rounded px-1 py-0.5 font-mono text-[10px]'>openai</code>{' '}
+          SDK 调用；若需 Anthropic 原生协议，请切换到支持它的端点标签（如有）。
+        </p>
+      )}
+
+      {(activeEndpoint.type === 'openai' ||
+        activeEndpoint.type === 'openai-response') && (
+        <CodexSubagentNote modelName={props.model.model_name || ''} />
+      )}
     </section>
   )
 }
@@ -767,7 +896,7 @@ function RateLimitsSection(props: { model: PricingModel }) {
         <SectionTitle icon={Gauge}>{t('Rate limits')}</SectionTitle>
         <div className='border-border/60 bg-muted/20 rounded-lg border p-3 text-xs leading-relaxed text-muted-foreground'>
           {t(
-            'No per-model rate limits configured. Requests are currently unlimited; limits can be set per API Key on the Tokens page.'
+            'No per-model rate limits are published. Token and user-level limits still apply.'
           )}
         </div>
       </section>

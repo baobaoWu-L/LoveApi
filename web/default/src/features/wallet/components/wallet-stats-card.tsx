@@ -16,15 +16,29 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { Activity, BarChart3, WalletCards } from 'lucide-react'
+import { Activity, BarChart3, Coins, RefreshCw, WalletCards } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { formatQuota } from '@/lib/format'
+import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
-import type { UserWalletData } from '../types'
+import type { UpstreamBalanceSummary, UserWalletData } from '../types'
+
+const formatUpstreamUSD = (value: number) =>
+  new Intl.NumberFormat(undefined, {
+    style: 'currency',
+    currency: 'USD',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(value)
 
 interface WalletStatsCardProps {
   user: UserWalletData | null
   loading?: boolean
+  upstream?: UpstreamBalanceSummary | null
+  onSyncUpstream?: () => void
+  syncingUpstream?: boolean
+  onSyncPrices?: () => void
+  syncingPrices?: boolean
 }
 
 export function WalletStatsCard(props: WalletStatsCardProps) {
@@ -45,29 +59,88 @@ export function WalletStatsCard(props: WalletStatsCardProps) {
     )
   }
 
+  const isUpstream = props.onSyncUpstream !== undefined
+  const isAdmin = isUpstream || props.onSyncPrices !== undefined
+  const upstream = props.upstream
+
   const stats = [
     {
-      label: t('Current Balance'),
-      value: formatQuota(props.user?.quota ?? 0),
-      description: t('Remaining quota'),
+      label: isUpstream ? t('Upstream Balance') : t('Current Balance'),
+      value: isUpstream
+        ? upstream
+          ? formatUpstreamUSD(upstream.balance_usd)
+          : t('Not synchronized')
+        : formatQuota(props.user?.quota ?? 0),
+      description: isUpstream
+        ? t('Live balance from upstream account (USD)')
+        : t('Remaining quota'),
       icon: WalletCards,
     },
     {
-      label: t('Total Usage'),
-      value: formatQuota(props.user?.used_quota ?? 0),
-      description: t('Total consumed quota'),
+      label: isUpstream ? t('Platform Usage') : t('Total Usage'),
+      value: isUpstream
+        ? formatUpstreamUSD(upstream?.used_usd ?? 0)
+        : formatQuota(props.user?.used_quota ?? 0),
+      description: isUpstream
+        ? t('Total upstream spend (USD)')
+        : t('Total consumed quota'),
       icon: BarChart3,
     },
     {
-      label: t('API Requests'),
-      value: (props.user?.request_count ?? 0).toLocaleString(),
-      description: t('Total requests made'),
+      label: isUpstream ? t('Platform API Requests') : t('API Requests'),
+      value: (
+        isUpstream ? (upstream?.request_count ?? 0) : (props.user?.request_count ?? 0)
+      ).toLocaleString(),
+      description: isUpstream
+        ? t('All users through this gateway')
+        : t('Total requests made'),
       icon: Activity,
     },
   ]
 
   return (
     <div className='overflow-hidden rounded-lg border'>
+      {isAdmin && (
+        <div className='bg-muted/30 flex items-center justify-between gap-3 border-b px-3 py-2 sm:px-5'>
+          <div className='text-muted-foreground text-xs'>
+            {upstream
+              ? t('Upstream account snapshot saved')
+              : t('Synchronize upstream account balances to view admin data')}
+          </div>
+          <div className='flex shrink-0 items-center gap-2'>
+            {props.onSyncUpstream && (
+              <Button
+                size='sm'
+                variant='outline'
+                onClick={props.onSyncUpstream}
+                disabled={props.syncingUpstream}
+                className='h-8 gap-1.5'
+              >
+                <RefreshCw
+                  className={`size-3.5 ${props.syncingUpstream ? 'animate-spin' : ''}`}
+                />
+                {props.syncingUpstream ? t('Syncing') : t('Sync upstream')}
+              </Button>
+            )}
+            {props.onSyncPrices && (
+              <Button
+                size='sm'
+                variant='outline'
+                onClick={props.onSyncPrices}
+                disabled={props.syncingPrices}
+                className='h-8 gap-1.5'
+              >
+                <Coins
+                  className={`size-3.5 ${props.syncingPrices ? 'animate-spin' : ''}`}
+                />
+                {props.syncingPrices
+                  ? t('Syncing prices, please wait...')
+                  : t('Upstream price sync')}
+              </Button>
+            )}
+          </div>
+        </div>
+      )}
       <div className='divide-border/60 grid grid-cols-3 divide-x'>
         {stats.map((item) => (
           <div key={item.label} className='px-3 py-3 sm:px-5 sm:py-4'>

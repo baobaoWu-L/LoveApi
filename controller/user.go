@@ -18,6 +18,7 @@ import (
 	"github.com/QuantumNous/new-api/service"
 	"github.com/QuantumNous/new-api/setting"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
+	"github.com/QuantumNous/new-api/setting/system_setting"
 
 	"github.com/QuantumNous/new-api/constant"
 
@@ -145,10 +146,18 @@ func Register(c *gin.Context) {
 		return
 	}
 	var user model.User
-	err := json.NewDecoder(c.Request.Body).Decode(&user)
+	err := common.DecodeJson(c.Request.Body, &user)
 	if err != nil {
 		common.ApiErrorI18n(c, i18n.MsgInvalidParams)
 		return
+	}
+	legalSettings := system_setting.GetLegalSettings()
+	if user.AgreeUserAgreement == nil || !*user.AgreeUserAgreement ||
+		user.AgreePrivacyPolicy == nil || !*user.AgreePrivacyPolicy {
+		if legalSettings.UserAgreement != "" || legalSettings.PrivacyPolicy != "" {
+			common.ApiErrorI18n(c, i18n.MsgUserLegalConsentRequired)
+			return
+		}
 	}
 	if err := common.Validate.Struct(&user); err != nil {
 		common.ApiErrorI18n(c, i18n.MsgUserInputInvalid, map[string]any{"Error": err.Error()})
@@ -635,6 +644,16 @@ func UpdateSelf(c *gin.Context) {
 		common.ApiErrorI18n(c, i18n.MsgInvalidParams)
 		return
 	}
+	// Never accept account-ledger fields from a self-service request. This is
+	// enforced server-side so changing the request in F12 cannot alter quota,
+	// usage, role, status, or another user's identity.
+	for _, field := range []string{"quota", "used_quota", "request_count", "aff_quota", "aff_history_quota", "role", "status", "id"} {
+		if _, exists := requestData[field]; exists {
+			common.SysLog(fmt.Sprintf("blocked self-update of protected field %s for user %d", field, c.GetInt("id")))
+			c.JSON(http.StatusForbidden, gin.H{"success": false, "message": "禁止修改账户余额、用量或系统字段"})
+			return
+		}
+	}
 
 	// 检查是否是用户设置更新请求 (sidebar_modules 或 language)
 	if sidebarModules, sidebarExists := requestData["sidebar_modules"]; sidebarExists {
@@ -953,6 +972,10 @@ func ManageUser(c *gin.Context) {
 			model.RecordLogWithAdminInfo(user.Id, model.LogTypeManage,
 				fmt.Sprintf("管理员减少用户额度 %s", logger.LogQuota(req.Value)), adminInfo)
 		case "override":
+			if req.Value < 0 {
+				common.ApiErrorI18n(c, i18n.MsgUserQuotaChangeZero)
+				return
+			}
 			oldQuota := user.Quota
 			if err := model.DB.Model(&model.User{}).Where("id = ?", user.Id).Update("quota", req.Value).Error; err != nil {
 				common.ApiError(c, err)

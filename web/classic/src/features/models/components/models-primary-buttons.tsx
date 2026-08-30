@@ -25,6 +25,7 @@ import {
   AlertCircle,
   ArrowLeftRight,
   Loader2,
+  Coins,
 } from 'lucide-react'
 import { useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
@@ -39,7 +40,7 @@ import {
   DropdownMenuShortcut,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { syncFromPricing } from '../api'
+import { syncFromPricing, recomputePrices } from '../api'
 import { useModels } from './models-provider'
 
 export function ModelsPrimaryButtons() {
@@ -47,6 +48,7 @@ export function ModelsPrimaryButtons() {
   const { setOpen, setCurrentRow } = useModels()
   const queryClient = useQueryClient()
   const [syncingPricing, setSyncingPricing] = useState(false)
+  const [syncingUpstreamPrice, setSyncingUpstreamPrice] = useState(false)
 
   const handleCreateModel = () => {
     setCurrentRow(null)
@@ -80,6 +82,31 @@ export function ModelsPrimaryButtons() {
       toast.error(t('Sync failed'))
     } finally {
       setSyncingPricing(false)
+    }
+  }
+
+  const handleSyncUpstreamPrice = async () => {
+    setSyncingUpstreamPrice(true)
+    try {
+      const res = await recomputePrices()
+      if (res.success) {
+        const updated = res.data?.updated ?? 0
+        const markup = res.data?.markup ?? 1
+        toast.success(
+          t('Synced {{count}} model prices (×{{factor}})', {
+            count: updated,
+            factor: markup,
+          })
+        )
+        queryClient?.invalidateQueries({ queryKey: ['models'] })
+        queryClient?.invalidateQueries({ queryKey: ['pricing'] })
+      } else {
+        toast.error(res.message || t('Price sync failed'))
+      }
+    } catch {
+      toast.error(t('Price sync failed'))
+    } finally {
+      setSyncingUpstreamPrice(false)
     }
   }
 
@@ -126,6 +153,22 @@ export function ModelsPrimaryButtons() {
                 <Loader2 className='h-4 w-4 animate-spin' />
               ) : (
                 <ArrowLeftRight className='h-4 w-4' />
+              )}
+            </DropdownMenuShortcut>
+          </DropdownMenuItem>
+
+          <DropdownMenuItem
+            onClick={handleSyncUpstreamPrice}
+            disabled={syncingUpstreamPrice}
+          >
+            {syncingUpstreamPrice
+              ? t('Syncing...')
+              : t('Sync Upstream Price')}
+            <DropdownMenuShortcut>
+              {syncingUpstreamPrice ? (
+                <Loader2 className='h-4 w-4 animate-spin' />
+              ) : (
+                <Coins className='h-4 w-4' />
               )}
             </DropdownMenuShortcut>
           </DropdownMenuItem>

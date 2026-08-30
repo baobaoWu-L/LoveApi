@@ -62,7 +62,8 @@ export function SignUpForm({
   const { t } = useTranslation()
   const [isLoading, setIsLoading] = useState(false)
   const [verificationCode, setVerificationCode] = useState('')
-  const [agreedToLegal, setAgreedToLegal] = useState(false)
+  const [agreedToUserAgreement, setAgreedToUserAgreement] = useState(false)
+  const [agreedToPrivacyPolicy, setAgreedToPrivacyPolicy] = useState(false)
   const [wechatCode, setWeChatCode] = useState('')
   const [isWeChatDialogOpen, setIsWeChatDialogOpen] = useState(false)
   const [isWeChatSubmitting, setIsWeChatSubmitting] = useState(false)
@@ -102,6 +103,9 @@ export function SignUpForm({
   const hasUserAgreement = Boolean(status?.user_agreement_enabled)
   const hasPrivacyPolicy = Boolean(status?.privacy_policy_enabled)
   const requiresLegalConsent = hasUserAgreement || hasPrivacyPolicy
+  const legalConsentSatisfied =
+    (!hasUserAgreement || agreedToUserAgreement) &&
+    (!hasPrivacyPolicy || agreedToPrivacyPolicy)
   const oauthRegisterEnabled =
     status?.oauth_register_enabled ??
     status?.data?.oauth_register_enabled ??
@@ -124,14 +128,16 @@ export function SignUpForm({
 
   useEffect(() => {
     if (requiresLegalConsent) {
-      setAgreedToLegal(false)
+      setAgreedToUserAgreement(false)
+      setAgreedToPrivacyPolicy(false)
     } else {
-      setAgreedToLegal(true)
+      setAgreedToUserAgreement(true)
+      setAgreedToPrivacyPolicy(true)
     }
   }, [requiresLegalConsent])
 
   async function onSubmit(data: z.infer<typeof registerFormSchema>) {
-    if (requiresLegalConsent && !agreedToLegal) {
+    if (requiresLegalConsent && !legalConsentSatisfied) {
       toast.error(legalConsentErrorMessage)
       return
     }
@@ -157,6 +163,8 @@ export function SignUpForm({
         verification_code: verificationCode || undefined,
         aff: getAffiliateCode(),
         turnstile: turnstileToken,
+        agree_user_agreement: agreedToUserAgreement,
+        agree_privacy_policy: agreedToPrivacyPolicy,
       })
 
       if (res?.success) {
@@ -175,7 +183,7 @@ export function SignUpForm({
   }
 
   const handleOpenWeChatDialog = () => {
-    if (requiresLegalConsent && !agreedToLegal) {
+    if (requiresLegalConsent && !legalConsentSatisfied) {
       toast.error(legalConsentErrorMessage)
       return
     }
@@ -199,7 +207,10 @@ export function SignUpForm({
 
     setIsWeChatSubmitting(true)
     try {
-      const res = await wechatLoginByCode(wechatCode)
+      const res = await wechatLoginByCode(wechatCode, {
+        registration: true,
+        legalConsent: legalConsentSatisfied,
+      })
       if (res?.success) {
         await handleLoginSuccess(res.data as { id?: number } | null)
         toast.success(t('Signed in via WeChat'))
@@ -332,8 +343,10 @@ export function SignUpForm({
 
         <LegalConsent
           status={status}
-          checked={agreedToLegal}
-          onCheckedChange={setAgreedToLegal}
+          agreementChecked={agreedToUserAgreement}
+          privacyChecked={agreedToPrivacyPolicy}
+          onAgreementChange={setAgreedToUserAgreement}
+          onPrivacyChange={setAgreedToPrivacyPolicy}
           className='mt-1'
         />
 
@@ -341,7 +354,7 @@ export function SignUpForm({
         <Button
           type='submit'
           className='mt-2 w-full justify-center gap-2 rounded-md border-0 bg-neutral-900 text-white hover:bg-neutral-800 dark:bg-white dark:text-neutral-900 dark:hover:bg-neutral-200'
-          disabled={isLoading || (requiresLegalConsent && !agreedToLegal)}
+          disabled={isLoading || (requiresLegalConsent && !legalConsentSatisfied)}
         >
           {isLoading ? <Loader2 className='h-4 w-4 animate-spin' /> : null}
           {t('Create account')}
@@ -350,7 +363,8 @@ export function SignUpForm({
         {oauthRegisterEnabled && (
           <OAuthProviders
             status={status}
-            disabled={isLoading || (requiresLegalConsent && !agreedToLegal)}
+            disabled={isLoading || (requiresLegalConsent && !legalConsentSatisfied)}
+            registrationConsent={legalConsentSatisfied}
             onWeChatLogin={hasWeChatLogin ? handleOpenWeChatDialog : undefined}
             isWeChatLoading={isWeChatSubmitting}
             className='pt-2'
@@ -413,7 +427,7 @@ export function SignUpForm({
                 disabled={
                   isWeChatSubmitting ||
                   !wechatCode.trim() ||
-                  (requiresLegalConsent && !agreedToLegal)
+                  (requiresLegalConsent && !legalConsentSatisfied)
                 }
                 className='gap-2'
               >

@@ -24,8 +24,8 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { PublicLayout } from '@/components/layout'
 import { PastelBackdrop } from '@/components/pastel-backdrop'
 import { GsapReveal } from '@/components/gsap-reveal'
-import { Card } from '@/components/ui/card'
 import { getAboutContent } from './api'
+import { getPrivacyPolicy, getUserAgreement } from '../legal/api'
 
 function isValidUrl(value: string) {
   try {
@@ -40,130 +40,114 @@ function isLikelyHtml(value: string) {
   return /<\/?[a-z][\s\S]*>/i.test(value)
 }
 
-function EmptyAboutState() {
-  const { t } = useTranslation()
-  const currentYear = new Date().getFullYear()
+function LegalPreview({ title, content }: { title: string; content: string }) {
+  const trimmed = content.trim()
+  const isUrl = isValidUrl(trimmed)
 
   return (
-    <div className='flex min-h-[40vh] items-center justify-center rounded-2xl border border-dashed p-8'>
-      <div className='max-w-2xl space-y-6 text-center'>
-        <div className='flex justify-center'>
-          <Construction className='text-muted-foreground h-20 w-20' />
-        </div>
-        <div className='space-y-2'>
-          <h2 className='text-2xl font-bold'>{t('No About Content Set')}</h2>
-          <p className='text-muted-foreground'>
-            {t(
-              'The administrator has not configured any about content yet. You can set it in the settings page, supporting HTML or URL.'
-            )}
-          </p>
-        </div>
-        <div className='space-y-4 text-sm'>
-          <p>
-            {t('Love API Project Repository:')}{' '}
-            <a
-              href='https://github.com/QuantumNous/new-api'
-              target='_blank'
-              rel='noopener noreferrer'
-              className='text-primary hover:underline'
-            >
-              {t('https://github.com/QuantumNous/new-api')}
-            </a>
-          </p>
-          <p className='text-muted-foreground'>
-            {t('LoveAPI')} © {currentYear}{' '}
-            <a
-              href='https://github.com/QuantumNous'
-              target='_blank'
-              rel='noopener noreferrer'
-              className='text-primary hover:underline'
-            >
-              {t('QuantumNous')}
-            </a>{' '}
-            {t('| Based on')}{' '}
-            <a
-              href='https://github.com/songquanpeng/one-api'
-              target='_blank'
-              rel='noopener noreferrer'
-              className='text-primary hover:underline'
-            >
-              {t('One API')}
-            </a>{' '}
-            © 2023{' '}
-            <a
-              href='https://github.com/songquanpeng'
-              target='_blank'
-              rel='noopener noreferrer'
-              className='text-primary hover:underline'
-            >
-              {t('JustSong')}
-            </a>
-          </p>
-        </div>
-      </div>
-    </div>
+    <section className='border-border/60 bg-background/60 rounded-xl border p-5 text-left shadow-sm'>
+      <h3 className='text-lg font-semibold'>{title}</h3>
+      {isUrl ? (
+        <a
+          href={trimmed}
+          target='_blank'
+          rel='noopener noreferrer'
+          className='text-primary mt-2 inline-block text-sm underline underline-offset-4'
+        >
+          {trimmed}
+        </a>
+      ) : (
+        <Markdown className='prose-neutral dark:prose-invert mt-3 max-w-none text-sm'>
+          {trimmed}
+        </Markdown>
+      )}
+    </section>
   )
 }
 
-function PrivacySection() {
+function EmptyAboutState({
+  userAgreement,
+  privacyPolicy,
+}: {
+  userAgreement: string
+  privacyPolicy: string
+}) {
   const { t } = useTranslation()
   const currentYear = new Date().getFullYear()
 
-  const items: Array<{ title: string; body: string }> = [
-    {
-      title: '信息收集',
-      body: '我们可能收集您在注册、使用过程中提供的账号信息（如用户名、邮箱），以及服务运行所需的日志数据（如 API 调用记录、请求时间与模型名称），用于账户管理与服务维护。',
-    },
-    {
-      title: '信息使用',
-      body: '收集的信息仅用于提供、维护和改进本服务，包括身份验证、计数与计费、安全防护及使用统计。我们不会将您的个人信息用作其他用途。',
-    },
-    {
-      title: '数据共享与转发',
-      body: '当您发起模型请求时，请求内容会按需转发到您所选择的上游模型供应商以完成调用，这是提供服务所必需的。除此外我们不会向任何第三方出售或出租您的个人信息。',
-    },
-    {
-      title: 'Cookie 与本地存储',
-      body: '我们可能使用 Cookie 及浏览器本地存储来维持您的登录状态、偏好设置与页面体验。您可以随时通过浏览器设置清除这些数据。',
-    },
-    {
-      title: '数据安全',
-      body: '我们采取合理的技术与管理措施保护您的信息安全，包括传输加密、访问控制与密钥隔离。但请理解，任何互联网传输方式都无法保证绝对安全。',
-    },
-    {
-      title: '您的权利',
-      body: '您有权查询、更正或删除您的账户信息；如无必要，我们会在您注销后删除或匿名化相关数据。如需行使上述权利，请联系站点管理员。',
-    },
-    {
-      title: '政策变更',
-      body: '我们可能适时更新本隐私条款，更新后会在此页面公布。变更重大时，我们会以显著方式提示您。继续使用本服务即视为您接受更新后的条款。',
-    },
-    {
-      title: '联系我们',
-      body: '如您对本隐私条款有任何疑问，欢迎通过站点「模型广场」页脚提供的联系邮箱与我们取得联系。',
-    },
-  ]
-
   return (
-    <section id='privacy' data-reveal className='pt-12'>
-      <h2 className='flex items-center gap-2 text-2xl font-semibold tracking-tight'>
-        <span className='text-xl'>🔒</span>
-        隐私条款
-      </h2>
-      <p className='text-muted-foreground mt-2 text-sm leading-relaxed'>
-        {t('Effective Date:')} {currentYear} 年 1 月 1 日
-      </p>
-      <div className='mt-6 grid gap-4 sm:grid-cols-2'>
-        {items.map((item) => (
-          <Card key={item.title} className='bg-background/50 p-5'>
-            <h3 className='text-sm font-semibold'>{item.title}</h3>
-            <p className='text-muted-foreground mt-1.5 text-[13px] leading-relaxed'>
-              {item.body}
+    <div className='space-y-6'>
+      <div className='flex min-h-[24vh] items-center justify-center rounded-2xl border border-dashed p-8'>
+        <div className='max-w-2xl space-y-6 text-center'>
+          <div className='flex justify-center'>
+            <Construction className='text-muted-foreground h-20 w-20' />
+          </div>
+          <div className='space-y-2'>
+            <h2 className='text-2xl font-bold'>{t('No About Content Set')}</h2>
+            <p className='text-muted-foreground'>
+              {t(
+                'The administrator has not configured any about content yet. You can set it in the settings page, supporting HTML or URL.'
+              )}
             </p>
-          </Card>
-        ))}
+          </div>
+          <div className='space-y-4 text-sm'>
+            <p>
+              {t('Love API Project Repository:')}{' '}
+              <a
+                href='https://github.com/QuantumNous/new-api'
+                target='_blank'
+                rel='noopener noreferrer'
+                className='text-primary hover:underline'
+              >
+                {t('https://github.com/QuantumNous/new-api')}
+              </a>
+            </p>
+            <p className='text-muted-foreground'>
+              {t('LoveAPI')} © {currentYear}{' '}
+              <a
+                href='https://github.com/QuantumNous'
+                target='_blank'
+                rel='noopener noreferrer'
+                className='text-primary hover:underline'
+              >
+                {t('QuantumNous')}
+              </a>{' '}
+              {t('| Based on')}{' '}
+              <a
+                href='https://github.com/songquanpeng/one-api'
+                target='_blank'
+                rel='noopener noreferrer'
+                className='text-primary hover:underline'
+              >
+                {t('One API')}
+              </a>{' '}
+              © 2023{' '}
+              <a
+                href='https://github.com/songquanpeng'
+                target='_blank'
+                rel='noopener noreferrer'
+                className='text-primary hover:underline'
+              >
+                {t('JustSong')}
+              </a>
+            </p>
+          </div>
+        </div>
       </div>
-    </section>
+
+      <div className='space-y-4'>
+        <div>
+          <h2 className='text-2xl font-semibold tracking-tight'>
+            {t('Legal Terms')}
+          </h2>
+          <p className='text-muted-foreground mt-1 text-sm'>
+            {t('Please review these terms before creating an account.')}
+          </p>
+        </div>
+        <LegalPreview title={t('User Agreement')} content={userAgreement} />
+        <LegalPreview title={t('Privacy Policy')} content={privacyPolicy} />
+      </div>
+    </div>
   )
 }
 
@@ -172,6 +156,16 @@ export function About() {
   const { data, isLoading } = useQuery({
     queryKey: ['about-content'],
     queryFn: getAboutContent,
+  })
+  const { data: agreementData } = useQuery({
+    queryKey: ['user-agreement'],
+    queryFn: getUserAgreement,
+    staleTime: 10 * 60 * 1000,
+  })
+  const { data: privacyData } = useQuery({
+    queryKey: ['privacy-policy'],
+    queryFn: getPrivacyPolicy,
+    staleTime: 10 * 60 * 1000,
   })
 
   const rawContent = data?.data?.trim() ?? ''
@@ -207,7 +201,10 @@ export function About() {
                 <Skeleton className='h-4 w-[80%]' />
               </div>
             ) : !hasContent ? (
-              <EmptyAboutState />
+              <EmptyAboutState
+                userAgreement={agreementData?.data ?? ''}
+                privacyPolicy={privacyData?.data ?? ''}
+              />
             ) : isUrl ? (
               <iframe
                 src={rawContent}
@@ -226,7 +223,6 @@ export function About() {
             )}
           </div>
 
-          <PrivacySection />
         </GsapReveal>
       </div>
     </PublicLayout>

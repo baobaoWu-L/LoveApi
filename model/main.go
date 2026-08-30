@@ -372,6 +372,23 @@ func migrateLOGDB() error {
 	if err = LOG_DB.AutoMigrate(&Log{}); err != nil {
 		return err
 	}
+	// Keep historical usage records aligned with the privacy-minimal schema:
+	// usage logs retain accounting/token counters but no request/response text
+	// or billing debug payloads.
+	if err = LOG_DB.Model(&Log{}).
+		Where("type = ?", LogTypeConsume).
+		Updates(map[string]interface{}{"content": "", "other": ""}).Error; err != nil {
+		return err
+	}
+	if DB.Migrator().HasTable(&Midjourney{}) {
+		if err = DB.Model(&Midjourney{}).
+			Where("prompt <> '' OR prompt_en <> '' OR description <> '' OR buttons <> '' OR properties <> ''").
+			Updates(map[string]interface{}{
+				"prompt": "", "prompt_en": "", "description": "", "buttons": "", "properties": "",
+			}).Error; err != nil {
+			return err
+		}
+	}
 	return nil
 }
 

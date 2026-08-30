@@ -48,7 +48,6 @@ import {
 } from '../../lib/mappers'
 import type { MidjourneyLog } from '../../types'
 import { ImageDialog } from '../dialogs/image-dialog'
-import { PromptDialog } from '../dialogs/prompt-dialog'
 import {
   createDurationColumn,
   createChannelColumn,
@@ -235,45 +234,6 @@ export function useDrawingLogsColumns(
         )
       },
       meta: { label: t('Image'), mobileHidden: true },
-    },
-    {
-      accessorKey: 'prompt',
-      header: ({ column }) => (
-        <DataTableColumnHeader column={column} title={t('Prompt')} />
-      ),
-      cell: function PromptCell({ row }) {
-        const log = row.original
-        const prompt = row.getValue('prompt') as string
-        const [dialogOpen, setDialogOpen] = useState(false)
-
-        if (!prompt) {
-          return <span className='text-muted-foreground/60 text-xs'>-</span>
-        }
-
-        return (
-          <>
-            <button
-              type='button'
-              className='group flex max-w-[220px] items-center text-left text-xs'
-              onClick={() => setDialogOpen(true)}
-              title={t('Click to view full prompt')}
-            >
-              <span className='text-muted-foreground truncate leading-snug group-hover:underline'>
-                {prompt}
-              </span>
-            </button>
-            <PromptDialog
-              prompt={prompt}
-              promptEn={log.prompt_en}
-              open={dialogOpen}
-              onOpenChange={setDialogOpen}
-            />
-          </>
-        )
-      },
-      meta: { label: t('Prompt'), mobileHidden: true },
-      size: 200,
-      maxSize: 220,
     },
     createFailReasonColumn<MidjourneyLog>({
       headerLabel: t('Fail Reason'),

@@ -1,5 +1,7 @@
 package model
 
+import "gorm.io/gorm"
+
 type Midjourney struct {
 	Id          int    `json:"id"`
 	Code        int    `json:"code"`
@@ -23,6 +25,18 @@ type Midjourney struct {
 	Quota       int    `json:"quota"`
 	Buttons     string `json:"buttons"`
 	Properties  string `json:"properties"`
+}
+
+// BeforeSave prevents user-provided prompts and descriptive payloads from
+// being persisted in usage/task records. Task IDs, status, timing and billing
+// fields remain available for polling and accounting.
+func (m *Midjourney) BeforeSave(_ *gorm.DB) error {
+	m.Prompt = ""
+	m.PromptEn = ""
+	m.Description = ""
+	m.Buttons = ""
+	m.Properties = ""
+	return nil
 }
 
 // TaskQueryParams 用于包含所有搜索条件的结构体，可以根据需求添加更多字段

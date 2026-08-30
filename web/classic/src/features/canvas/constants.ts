@@ -44,9 +44,9 @@ export const RESOLUTION_TIERS: {
   value: string
   price: number
 }[] = [
-  { label: '默认', value: 'default', price: 0.07 },
-  { label: '2K', value: '2k', price: 0.07 },
-  { label: '4K', value: '4k', price: 0.3 },
+  { label: '1K', value: '1k', price: 0.007 },
+  { label: '2K', value: '2k', price: 0.007 },
+  { label: '4K', value: '4k', price: 0.5 },
 ]
 
 // 输出格式
