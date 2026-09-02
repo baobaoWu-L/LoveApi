@@ -21,6 +21,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useNavigate, useParams, useSearch } from '@tanstack/react-router'
 import { ArrowLeft, Code2, HeartPulse, Info, Timer } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import { getModelDescription } from '../lib/model-description'
 import { getLobeIcon } from '@/lib/lobe-icon'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -271,7 +272,7 @@ function ModelHeader(props: { model: PricingModel }) {
   const vendorIcon = model.vendor_icon
     ? getLobeIcon(model.vendor_icon, 20)
     : null
-  const description = model.description || model.vendor_description || null
+  const description = getModelDescription(model, t)
   const tags = parseTags(model.tags)
   const isSpecialExpression =
     isDynamicPricingModel(model) && getDynamicPricingTiers(model).length === 0

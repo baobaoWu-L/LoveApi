@@ -140,7 +140,7 @@ export function useTopNavLinks(): TopNavLink[] {
 
   // API Doc
   if (modules?.['api-doc'] !== false) {
-    links.push({ title: 'API 文档', href: '/api-doc' })
+    links.push({ title: t('API Documentation'), href: '/api-doc' })
   }
 
   // Rankings

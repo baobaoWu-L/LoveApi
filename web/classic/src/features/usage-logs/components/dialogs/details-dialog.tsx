@@ -16,6 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import { useEffect, useState } from 'react'
 import {
   Copy,
   Check,
@@ -29,6 +30,9 @@ import {
   ShieldCheck,
   UserCog,
   Info,
+  Download,
+  Maximize2,
+  Image as ImageIcon,
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { formatBillingCurrencyFromUSD } from '@/lib/currency'
@@ -48,6 +52,7 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { StatusBadge, type StatusBadgeProps } from '@/components/status-badge'
 import { DynamicPricingBreakdown } from '@/features/pricing/components/dynamic-pricing-breakdown'
 import type { UsageLog } from '../../data/schema'
+import { ImageDialog } from './image-dialog'
 import {
   parseLogOther,
   getParamOverrideActionLabel,
@@ -56,6 +61,7 @@ import {
   getTieredBillingSummary,
   hasAnyCacheTokens,
   isViolationFeeLog,
+  getImageBilling,
   getFirstResponseTimeColor,
   getResponseTimeColor,
 } from '../../lib/format'
@@ -391,6 +397,70 @@ function TokenBreakdown(props: { log: UsageLog; other: LogOtherData }) {
   )
 }
 
+// 与无限画布一致：图片经本地下载代理拉回，带 New-Api-User 头 + cookie，
+// 避免上游一次性签名/防盗链链接在 <img> 中加载 403。
+function imageProxyUrl(url: string): string {
+  return `/api/image/download?url=${encodeURIComponent(url)}`
+}
+
+function currentUid(): string {
+  return typeof window !== 'undefined' ? window.localStorage.getItem('uid') || '' : ''
+}
+
+async function fetchImageAsDataUrl(url: string): Promise<string> {
+  if (!url) return ''
+  if (url.startsWith('data:')) return url
+  try {
+    const res = await fetch(imageProxyUrl(url), {
+      credentials: 'include',
+      headers: { 'New-Api-User': currentUid() },
+    })
+    if (!res.ok) return ''
+    const blob = await res.blob()
+    return await new Promise<string>((resolve) => {
+      const reader = new FileReader()
+      reader.onload = () => resolve(String(reader.result))
+      reader.onerror = () => resolve('')
+      reader.readAsDataURL(blob)
+    })
+  } catch {
+    return ''
+  }
+}
+
+async function downloadGeneratedImage(url: string): Promise<boolean> {
+  if (!url) return false
+  if (url.startsWith('data:')) {
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'generated-image.png'
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    return true
+  }
+  try {
+    const res = await fetch(imageProxyUrl(url), {
+      credentials: 'include',
+      headers: { 'New-Api-User': currentUid() },
+    })
+    if (!res.ok) throw new Error('download failed')
+    const blob = await res.blob()
+    const obj = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = obj
+    a.download = 'generated-image.png'
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    window.setTimeout(() => URL.revokeObjectURL(obj), 1000)
+    return true
+  } catch {
+    window.open(url, '_blank', 'noopener')
+    return false
+  }
+}
+
 interface DetailsDialogProps {
   log: UsageLog
   isAdmin: boolean
@@ -404,6 +474,24 @@ export function DetailsDialog(props: DetailsDialogProps) {
   const details = props.log.content ?? ''
   const other = parseLogOther(props.log.other)
   const typeConfig = getLogTypeConfig(props.log.type)
+  const imageBilling = getImageBilling(other)
+  const generatedUrl = imageBilling.resolvedUrl
+  const [imageDataUrl, setImageDataUrl] = useState('')
+  const [imagePreviewOpen, setImagePreviewOpen] = useState(false)
+  const [downloadingImage, setDownloadingImage] = useState(false)
+  useEffect(() => {
+    if (!generatedUrl) {
+      setImageDataUrl('')
+      return
+    }
+    let cancelled = false
+    void fetchImageAsDataUrl(generatedUrl).then((dataUrl) => {
+      if (!cancelled) setImageDataUrl(dataUrl)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [generatedUrl])
 
   const isViolation = isViolationFeeLog(other)
   const isRefund = props.log.type === 6
@@ -485,6 +573,7 @@ export function DetailsDialog(props: DetailsDialogProps) {
     useChannel && useChannel.length > 0 ? useChannel.join(' → ') : undefined
 
   return (
+    <>
     <Dialog open={props.open} onOpenChange={props.onOpenChange}>
       <DialogContent
         className={cn(
@@ -526,6 +615,13 @@ export function DetailsDialog(props: DetailsDialogProps) {
                   mono
                 />
               )}
+
+              <DetailRow
+                label={t('Execution Mode')}
+                value={props.log.is_stream ? t('Streaming') : t('Synchronous')}
+              />
+
+              <DetailRow label={t('Usage')} value='API' />
 
               {props.isAdmin && props.log.channel > 0 && (
                 <DetailRow
@@ -1017,6 +1113,106 @@ export function DetailsDialog(props: DetailsDialogProps) {
                 </DetailSection>
               )}
 
+            {/* 图片生成明细（分辨率档位/倍率/数量/单价等） */}
+            {isConsume && imageBilling.hasBilling && (
+              <DetailSection
+                icon={<ImageIcon className='size-3.5' aria-hidden='true' />}
+                label={t('Image Generation Details')}
+              >
+                {imageBilling.tier && (
+                  <DetailRow
+                    label={t('Resolution Tier')}
+                    value={imageBilling.tier.toUpperCase()}
+                    mono
+                  />
+                )}
+                {imageBilling.multiplier != null && (
+                  <DetailRow
+                    label={t('Resolution Multiplier')}
+                    value={`${imageBilling.multiplier}x`}
+                    mono
+                  />
+                )}
+                {imageBilling.count != null && (
+                  <DetailRow
+                    label={t('Image Count')}
+                    value={String(imageBilling.count)}
+                    mono
+                  />
+                )}
+                {imageBilling.unitPrice != null && (
+                  <DetailRow
+                    label={t('Per-image Price')}
+                    value={formatBillingCurrencyFromUSD(imageBilling.unitPrice, {
+                      digitsLarge: 4,
+                      digitsSmall: 6,
+                      abbreviate: false,
+                    })}
+                    mono
+                  />
+                )}
+                {imageBilling.actualPriceUsd != null && (
+                  <DetailRow
+                    label={t('Actual Cost')}
+                    value={`${formatBillingCurrencyFromUSD(imageBilling.actualPriceUsd, {
+                      digitsLarge: 4,
+                      digitsSmall: 6,
+                      abbreviate: false,
+                    })}（${t('Reference only')}）`}
+                    mono
+                  />
+                )}
+              </DetailSection>
+            )}
+
+            {/* 生成结果：可预览、可下载 */}
+            {generatedUrl && (
+              <DetailSection
+                icon={<ImageIcon className='size-3.5' aria-hidden='true' />}
+                label={t('Generated Image')}
+              >
+                <div className='min-w-0 space-y-2'>
+                  <div className='bg-muted/40 relative flex max-h-56 items-center justify-center overflow-hidden rounded-md border'>
+                    <img
+                      src={imageDataUrl || imageProxyUrl(generatedUrl)}
+                      alt={t('Generated Image')}
+                      className='max-h-56 w-full object-contain'
+                      loading='lazy'
+                    />
+                  </div>
+                  <DetailRow
+                    label={t('Generated Image Link')}
+                    mono
+                    value={<span className='break-all'>{generatedUrl}</span>}
+                  />
+                  <div className='flex flex-wrap gap-2'>
+                    <Button
+                      variant='outline'
+                      size='sm'
+                      onClick={() => setImagePreviewOpen(true)}
+                    >
+                      <Maximize2 className='size-3.5' />
+                      {t('Preview')}
+                    </Button>
+                    <Button
+                      variant='outline'
+                      size='sm'
+                      disabled={downloadingImage}
+                      onClick={() => {
+                        setDownloadingImage(true)
+                        void downloadGeneratedImage(
+                          imageDataUrl || generatedUrl
+                        ).finally(() => setDownloadingImage(false))
+                      }}
+                    >
+                      <Download className='size-3.5' />
+                      {t('Download')}
+                    </Button>
+                  </div>
+                </div>
+              </DetailSection>
+            )}
+
             {/* Content */}
             {details && (
               <div className='space-y-1.5'>
@@ -1046,6 +1242,12 @@ export function DetailsDialog(props: DetailsDialogProps) {
         </ScrollArea>
       </DialogContent>
     </Dialog>
+    <ImageDialog
+      imageUrl={imageDataUrl || imageProxyUrl(generatedUrl)}
+      open={imagePreviewOpen}
+      onOpenChange={setImagePreviewOpen}
+    />
+    </>
   )
 }
 

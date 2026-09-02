@@ -78,7 +78,7 @@ export function CTA(props: CTAProps) {
             className='rounded-full border-foreground/20 px-6 hover:bg-foreground/5 whitespace-nowrap'
             render={<Link to='/api-doc' />}
           >
-            API 文档
+            {t('API Documentation')}
           </Button>
         </div>
       </AnimateInView>

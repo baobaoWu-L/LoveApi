@@ -21,6 +21,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useNavigate, useParams, useSearch } from '@tanstack/react-router'
 import { ArrowLeft, Code2, HeartPulse, Info, Timer } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import { getModelDescription } from '../lib/model-description'
 import { getLobeIcon } from '@/lib/lobe-icon'
 import { cn } from '@/lib/utils'
 import { formatCurrencyFromUSD } from '@/lib/currency'
@@ -62,7 +63,7 @@ import { formatTierConditionHint } from '../lib/billing-expr'
 import { parseTags } from '../lib/filters'
 import { getAvailableGroups, isTokenBasedModel } from '../lib/model-helpers'
 import { inferModelMetadata } from '../lib/model-metadata'
-import { formatFixedPrice, formatGroupPrice } from '../lib/price'
+import { formatFixedPrice, formatGroupPrice, padPriceToThree } from '../lib/price'
 import type {
   Modality,
   ModelCapability,
@@ -86,6 +87,60 @@ function SectionTitle(props: { children: React.ReactNode }) {
       {props.children}
     </h2>
   )
+}
+
+type VideoPriceItem = {
+  key: string
+  label: string
+  unit: string
+  formatted: string
+}
+type VideoPriceGroup = { res: string; items: VideoPriceItem[] }
+
+/**
+ * 视频模型（如 grok-imagine-video）的 request_pricing 按分辨率(480p/720p…)
+ * 分组展示：每组列出 输入图片(/张)、输入视频(/秒)、输出视频(/秒)。
+ * 仅当 request_pricing 的 key 形如 `<res>_input_image / _input_video_second / _output_video_second` 时启用。
+ */
+function getVideoPriceGroups(
+  rp: Record<string, number>
+): VideoPriceGroup[] {
+  const resOrder = ['480p', '720p', '1080p', '2k', '4k']
+  const defs: Record<string, [string, string]> = {
+    input_image: ['输入图片', '/张'],
+    input_video_second: ['输入视频', '/秒'],
+    output_video_second: ['输出视频', '/秒'],
+  }
+  const resSet = new Set<string>()
+  for (const k of Object.keys(rp || {})) {
+    const m = k.match(/^(\d+p)_(.*)$/)
+    if (m) resSet.add(m[1])
+  }
+  if (resSet.size === 0) return []
+  return [...resSet]
+    .sort((a, b) => resOrder.indexOf(a) - resOrder.indexOf(b))
+    .map((res) => {
+      const items: VideoPriceItem[] = []
+      for (const [suffix, [label, unit]] of Object.entries(defs)) {
+        const key = `${res}_${suffix}`
+        const price = rp[key]
+        if (price != null) {
+          items.push({
+            key,
+            label,
+            unit,
+            formatted: padPriceToThree(
+              formatCurrencyFromUSD(price, {
+                digitsLarge: 2,
+                digitsSmall: 3,
+                abbreviate: false,
+              })
+            ),
+          })
+        }
+      }
+      return { res, items }
+    })
 }
 
 const CAPABILITY_LABEL_KEYS: Record<ModelCapability, string> = {
@@ -271,7 +326,7 @@ function ModelHeader(props: { model: PricingModel }) {
   const vendorIcon = model.vendor_icon
     ? getLobeIcon(model.vendor_icon, 20)
     : null
-  const description = model.description || model.vendor_description || null
+  const description = getModelDescription(model, t)
   const tags = parseTags(model.tags)
   const isSpecialExpression =
     isDynamicPricingModel(model) && getDynamicPricingTiers(model).length === 0
@@ -562,6 +617,57 @@ function GroupPricingSection(props: {
           <p className='text-muted-foreground/40 mt-1.5 text-[10px]'>
             {t('Prices shown per')} {tokenUnitLabel} tokens
           </p>
+        </div>
+      </section>
+    )
+  }
+
+  // 视频模型：按分辨率(480p/720p…)分组卡片展示（按秒/按张计费）
+  const videoGroups = getVideoPriceGroups(requestPricing)
+  if (!isTokenBased && videoGroups.length > 0) {
+    return (
+      <section>
+        <SectionTitle>{t('Pricing by Group')}</SectionTitle>
+        <AutoGroupChain model={props.model} autoGroups={props.autoGroups} />
+        <div className='space-y-3'>
+          {availableGroups.map((group) => (
+            <div key={group} className='overflow-hidden rounded-lg border'>
+              <div className='bg-muted/20 flex items-center justify-between gap-3 border-b px-3 py-2'>
+                <GroupBadge group={group} size='sm' />
+                <span className='text-muted-foreground font-mono text-xs'>
+                  按秒计费
+                </span>
+              </div>
+              <div className='px-3 py-2.5'>
+                {videoGroups.map((vg) => (
+                  <div key={vg.res} className='border-b py-2 last:border-b-0'>
+                    <div className='text-muted-foreground mb-1.5 text-xs font-medium'>
+                      {vg.res}
+                    </div>
+                    <div className='grid grid-cols-3 gap-2'>
+                      {vg.items.map((it) => (
+                        <div
+                          key={it.key}
+                          className='rounded-md border px-2 py-1.5 text-center'
+                        >
+                          <div className='text-muted-foreground text-[10px]'>
+                            {it.label}
+                          </div>
+                          <div className='font-mono text-xs'>
+                            {it.formatted}
+                            <span className='text-muted-foreground text-[10px]'>
+                              {' '}
+                              {it.unit}
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
         </div>
       </section>
     )

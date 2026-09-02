@@ -18,6 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { Download } from 'lucide-react'
 import {
   Dialog,
   DialogContent,
@@ -25,8 +26,44 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Skeleton } from '@/components/ui/skeleton'
+
+// 下载/预览用图片：dataURL 直接保存；http(s) 走本地下载代理（带 cookie），
+// 避免上游签名/防盗链链接无法直接下载。
+function downloadImageUrl(url: string): void {
+  if (!url) return
+  if (url.startsWith('data:')) {
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'image.png'
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    return
+  }
+  const uid = typeof window !== 'undefined' ? window.localStorage.getItem('uid') || '' : ''
+  void fetch(`/api/image/download?url=${encodeURIComponent(url)}`, {
+    credentials: 'include',
+    headers: uid ? { 'New-Api-User': uid } : undefined,
+  })
+    .then((res) => {
+      if (!res.ok) throw new Error('download failed')
+      return res.blob()
+    })
+    .then((blob) => {
+      const obj = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = obj
+      a.download = 'image.png'
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      window.setTimeout(() => URL.revokeObjectURL(obj), 1000)
+    })
+    .catch(() => window.open(url, '_blank', 'noopener'))
+}
 
 interface ImageDialogProps {
   imageUrl: string
@@ -111,6 +148,17 @@ export function ImageDialog({
               <p className='text-muted-foreground font-mono text-xs break-all'>
                 {imageUrl}
               </p>
+            </div>
+
+            <div className='mt-3 flex justify-end'>
+              <Button
+                variant='outline'
+                size='sm'
+                onClick={() => downloadImageUrl(imageUrl)}
+              >
+                <Download className='size-3.5' />
+                {t('Download')}
+              </Button>
             </div>
           </div>
         </ScrollArea>

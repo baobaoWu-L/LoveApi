@@ -3,6 +3,7 @@ package router
 import (
 	"github.com/QuantumNous/new-api/controller"
 	"github.com/QuantumNous/new-api/middleware"
+	"github.com/QuantumNous/new-api/relay"
 
 	// Import oauth package to register providers via init()
 	_ "github.com/QuantumNous/new-api/oauth"
@@ -12,6 +13,17 @@ import (
 )
 
 func SetApiRouter(router *gin.Engine) {
+	// Keep the canvas socket outside the gzip/API response middleware; those
+	// middleware wrap HTTP bodies and can interfere with WebSocket upgrades.
+	canvasRouter := router.Group("/api/canvas")
+	canvasRouter.GET("/ws", relay.CanvasWebSocket)
+	canvasHistoryRouter := canvasRouter.Group("/history")
+	canvasHistoryRouter.Use(middleware.UserAuth())
+	canvasHistoryRouter.GET("", controller.GetCanvasHistory)
+	canvasHistoryRouter.GET("/:image_id/image", controller.GetCanvasHistoryImage)
+	canvasHistoryRouter.POST("", controller.SaveCanvasHistory)
+	canvasHistoryRouter.DELETE("", controller.DeleteCanvasHistory)
+
 	apiRouter := router.Group("/api")
 	apiRouter.Use(middleware.RouteTag("api"))
 	apiRouter.Use(gzip.Gzip(gzip.DefaultCompression))

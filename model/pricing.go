@@ -262,14 +262,6 @@ func updatePricing() {
 		}
 		modelSupportEndpointTypes[model] = supportedEndpoints
 	}
-	// MySQL folds model names case-insensitively, so the upstream
-	// `minimax-m3`/`MiniMax-M3` rows share one metadata value. Keep the
-	// lowercase request-priced variant's upstream Anthropic + OpenAI support
-	// explicit; the display-only uppercase alias is narrowed below.
-	if _, ok := modelSupportEndpointTypes["minimax-m3"]; ok {
-		modelSupportEndpointTypes["minimax-m3"] = []constant.EndpointType{constant.EndpointTypeAnthropic, constant.EndpointTypeOpenAI}
-	}
-
 	// 构建全局 supportedEndpointMap（默认 + 自定义覆盖）
 	supportedEndpointMap = make(map[string]common.EndpointInfo)
 	// 1. 默认端点
@@ -374,40 +366,6 @@ func updatePricing() {
 			pricing.BillingExprByGroup = exprs
 		}
 		pricingMap = append(pricingMap, pricing)
-	}
-
-	// MySQL's default case-insensitive collation folds the upstream MiniMax
-	// aliases together in abilities/models. Keep the four upstream spellings
-	// visible in the model plaza while retaining their distinct billing units.
-	var miniMaxAliases []Pricing
-	for _, pricing := range pricingMap {
-		switch pricing.ModelName {
-		case "MiniMax-M2.7":
-			alias := pricing
-			alias.ModelName = "minimax-m2.7"
-			alias.QuotaType = 1
-			alias.ModelRatio = 0
-			alias.CompletionRatio = 0
-			alias.CacheRatio = nil
-			alias.CreateCacheRatio = nil
-			alias.ModelPrice = 0.0125
-			miniMaxAliases = append(miniMaxAliases, alias)
-		case "minimax-m3":
-			alias := pricing
-			alias.ModelName = "MiniMax-M3"
-			alias.SupportedEndpointTypes = []constant.EndpointType{constant.EndpointTypeOpenAI}
-			alias.QuotaType = 0
-			alias.ModelPrice = 0
-			alias.ModelRatio = 0.625
-			alias.CompletionRatio = 3
-			alias.CacheRatio = nil
-			alias.CreateCacheRatio = nil
-			miniMaxAliases = append(miniMaxAliases, alias)
-		}
-	}
-	pricingMap = append(pricingMap, miniMaxAliases...)
-	for _, alias := range miniMaxAliases {
-		modelSupportEndpointTypes[alias.ModelName] = append([]constant.EndpointType(nil), alias.SupportedEndpointTypes...)
 	}
 
 	// 防止大更新后数据不通用

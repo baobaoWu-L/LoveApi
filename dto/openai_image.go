@@ -12,20 +12,22 @@ import (
 )
 
 type ImageRequest struct {
-	Model             string          `json:"model"`
-	Prompt            string          `json:"prompt" binding:"required"`
-	N                 *uint           `json:"n,omitempty"`
-	Size              string          `json:"size,omitempty"`
-	Quality           string          `json:"quality,omitempty"`
-	ResponseFormat    string          `json:"response_format,omitempty"`
-	Style             json.RawMessage `json:"style,omitempty"`
-	User              json.RawMessage `json:"user,omitempty"`
-	ExtraFields       json.RawMessage `json:"extra_fields,omitempty"`
-	Background        json.RawMessage `json:"background,omitempty"`
-	Moderation        json.RawMessage `json:"moderation,omitempty"`
-	OutputFormat      json.RawMessage `json:"output_format,omitempty"`
-	OutputCompression json.RawMessage `json:"output_compression,omitempty"`
-	PartialImages     json.RawMessage `json:"partial_images,omitempty"`
+	Model               string          `json:"model"`
+	Prompt              string          `json:"prompt" binding:"required"`
+	N                   *uint           `json:"n,omitempty"`
+	Size                string          `json:"size,omitempty"`
+	AspectRatio         string          `json:"aspect_ratio,omitempty"`
+	ResolutionTierValue string          `json:"resolution_tier,omitempty"`
+	Quality             string          `json:"quality,omitempty"`
+	ResponseFormat      string          `json:"response_format,omitempty"`
+	Style               json.RawMessage `json:"style,omitempty"`
+	User                json.RawMessage `json:"user,omitempty"`
+	ExtraFields         json.RawMessage `json:"extra_fields,omitempty"`
+	Background          json.RawMessage `json:"background,omitempty"`
+	Moderation          json.RawMessage `json:"moderation,omitempty"`
+	OutputFormat        json.RawMessage `json:"output_format,omitempty"`
+	OutputCompression   json.RawMessage `json:"output_compression,omitempty"`
+	PartialImages       json.RawMessage `json:"partial_images,omitempty"`
 	// Stream            bool            `json:"stream,omitempty"`
 	Images        json.RawMessage `json:"images,omitempty"`
 	Mask          json.RawMessage `json:"mask,omitempty"`
@@ -43,9 +45,9 @@ type ImageRequest struct {
 // gateway. These are intentionally fixed per request and do not use model or
 // group multipliers.
 var GPTImage2PricesUSD = map[string]float64{
-	"1k": 0.007,
-	"2k": 0.007,
-	"4k": 0.50,
+	"1k": 0.07,
+	"2k": 0.07,
+	"4k": 0.30,
 }
 
 var fixedImagePricesUSD = map[string]float64{
@@ -56,6 +58,12 @@ var fixedImagePricesUSD = map[string]float64{
 func (i *ImageRequest) ResolutionTier() string {
 	if i == nil {
 		return "2k"
+	}
+	if i.ResolutionTierValue != "" {
+		tier := strings.ToLower(strings.TrimSpace(i.ResolutionTierValue))
+		if tier == "1k" || tier == "2k" || tier == "4k" {
+			return tier
+		}
 	}
 	if raw, ok := i.Extra["resolution_tier"]; ok {
 		var tier string
@@ -132,13 +140,13 @@ func (r ImageRequest) MarshalJSON() ([]byte, error) {
 		return nil, err
 	}
 
-	// 不能合并ExtraFields！！！！！！！！
-	// 合并 ExtraFields
-	//for k, v := range r.Extra {
-	//	if _, exists := baseMap[k]; !exists {
-	//		baseMap[k] = v
-	//	}
-	//}
+	// Preserve provider-specific fields captured by the permissive decoder while
+	// never allowing them to overwrite an explicit standard field.
+	for k, v := range r.Extra {
+		if _, exists := baseMap[k]; !exists {
+			baseMap[k] = v
+		}
+	}
 
 	return common.Marshal(baseMap)
 }

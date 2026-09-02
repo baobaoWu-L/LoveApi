@@ -441,6 +441,15 @@ func PostTextConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, us
 	}
 	if detail, ok := ctx.Get("image_billing_detail"); ok && detail != nil {
 		other["image_billing"] = detail
+		// 图片生成成功后，上游返回的生成结果链接（可能为一次性签名/防盗链地址）
+		// 由 relay 层写入 ctx，这里并入 image_billing 以便日志展示「生成结果链接」。
+		if url, ok := ctx.Get("image_generated_url"); ok {
+			if urlStr, ok := url.(string); ok && urlStr != "" {
+				if billingMap, ok := detail.(map[string]interface{}); ok {
+					billingMap["generated_image_url"] = urlStr
+				}
+			}
+		}
 	}
 	if summary.CacheCreationTokens > 0 {
 		other["cache_creation_tokens"] = summary.CacheCreationTokens

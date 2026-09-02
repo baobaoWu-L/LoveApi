@@ -19,12 +19,12 @@ For commercial licensing, please contact support@quantumnous.com
 import {
   Zap,
   Shield,
-  Globe,
+  GitBranch,
   Code,
   Gauge,
   DollarSign,
   Users,
-  HeartHandshake,
+  Headphones,
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { AnimateInView } from '@/components/animate-in-view'
@@ -54,10 +54,10 @@ export function Features(_props: FeaturesProps) {
       icon: <Shield className='size-5' strokeWidth={1.5} />,
     },
     {
-      id: 'global',
-      title: t('Global Coverage'),
-      desc: t('Multi-region deployment for stable global access'),
-      icon: <Globe className='size-5' strokeWidth={1.5} />,
+      id: 'routing',
+      title: t('Custom Model Routing'),
+      desc: t('Route each request by model, capability, cost, or team policy'),
+      icon: <GitBranch className='size-5' strokeWidth={1.5} />,
     },
     {
       id: 'developer',
@@ -84,10 +84,10 @@ export function Features(_props: FeaturesProps) {
       icon: <Users className='size-5' strokeWidth={1.5} />,
     },
     {
-      id: 'opensource',
-      title: t('Open Source'),
-      desc: t('Community driven, self-hosted, and extensible'),
-      icon: <HeartHandshake className='size-5' strokeWidth={1.5} />,
+      id: 'support',
+      title: t('Dedicated Support'),
+      desc: t('Priority technical support with SLA-backed service assurance'),
+      icon: <Headphones className='size-5' strokeWidth={1.5} />,
     },
   ]
 

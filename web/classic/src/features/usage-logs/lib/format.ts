@@ -106,6 +106,26 @@ export function parseLogOther(other: string): LogOtherData | null {
 }
 
 /**
+ * 提取图片生成日志的计费明细与生成结果链接。
+ * 后端把明细写入 other.image_billing，并把生成结果链接塞进
+ * image_billing.generated_image_url（兼容顶层 image_generated_url）。
+ */
+export function getImageBilling(other: LogOtherData | null) {
+  const billing = other?.image_billing
+  return {
+    resolvedUrl: billing?.generated_image_url || other?.image_generated_url || '',
+    tier: billing?.resolution_tier || '',
+    multiplier: billing?.group_multiplier,
+    count: billing?.requested_images,
+    unitPrice: billing?.unit_price_usd,
+    actualQuota: billing?.actual_quota,
+    actualPriceUsd: billing?.actual_price_usd,
+    estimatedQuota: billing?.estimated_quota,
+    hasBilling: Boolean(billing),
+  }
+}
+
+/**
  * Get time color based on duration (in seconds)
  */
 export function getTimeColor(

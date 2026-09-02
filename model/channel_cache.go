@@ -241,7 +241,7 @@ func getCachedChannels(group, model string) []int {
 	result := make([]int, 0)
 	for _, key := range keys {
 		for id, ids := range modelMap {
-			if id != key && !strings.EqualFold(strings.TrimSpace(id), key) {
+			if strings.TrimSpace(id) != key {
 				continue
 			}
 			for _, channelID := range ids {

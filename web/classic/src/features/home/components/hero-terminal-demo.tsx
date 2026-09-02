@@ -73,56 +73,26 @@ const API_DEMOS: ApiDemoConfig[] = [
     latency: 168,
   },
   {
-    id: 'claude',
-    label: 'Claude',
-    method: 'POST',
-    endpoint: '/v1/messages',
+    id: 'claude', label: 'Claude', method: 'POST', endpoint: '/v1/messages',
     headers: ['"x-api-key: sk-••••"', '"anthropic-version: 2023-06-01"'],
-    request: [
-      '"model": "your-model",',
-      '"max_tokens": 1024,',
-      '"messages": [',
-      '  { "role": "user", "content": "..." }',
-      ']',
-    ],
-    response: [
-      '{',
-      '  "content": [{ "type": "text", "text": <text> }],',
-      '  "usage": { "input_tokens": <in>, "output_tokens": <out> }',
-      '}',
-    ],
-    responseHighlights: ['<text>', '<in>', '<out>'],
-    tokens: 29,
-    latency: 156,
+    request: ['"model": "your-model",', '"max_tokens": 1024,', '"messages": [', '  { "role": "user", "content": "..." }', ']'],
+    response: ['{', '  "content": [{ "type": "text", "text": <text> }],', '  "usage": { "input_tokens": <in>, "output_tokens": <out> }', '}'],
+    responseHighlights: ['<text>', '<in>', '<out>'], tokens: 29, latency: 156,
   },
   {
-    id: 'gemini',
-    label: 'Gemini',
-    method: 'POST',
-    endpoint: '/v1beta/models/{model}:generateContent',
+    id: 'gemini', label: 'Gemini', method: 'POST', endpoint: '/v1beta/models/{model}:generateContent',
     headers: ['"x-goog-api-key: sk-••••"'],
-    request: [
-      '"contents": [',
-      '  { "role": "user",',
-      '    "parts": [{ "text": "..." }] }',
-      ']',
-    ],
-    response: [
-      '{',
-      '  "candidates": [{ "content": { "parts": [{ "text": <text> }] } }],',
-      '  "usageMetadata": { "totalTokenCount": <tokens> }',
-      '}',
-    ],
-    responseHighlights: ['<text>', '<tokens>'],
-    tokens: 25,
-    latency: 93,
+    request: ['"contents": [', '  { "role": "user",', '    "parts": [{ "text": "..." }] }', ']'],
+    response: ['{', '  "candidates": [{ "content": { "parts": [{ "text": <text> }] } }],', '  "usageMetadata": { "totalTokenCount": <tokens> }', '}'],
+    responseHighlights: ['<text>', '<tokens>'], tokens: 25, latency: 93,
   },
 ]
 
 const CYCLE_INTERVAL = 4500
 const TRANSITION_MS = 220
 
-export function HeroTerminalDemo() {
+export function HeroTerminalDemo({ variant = 'all' }: { variant?: 'all' | 'openai' | 'providers' }) {
+  const demos = variant === 'openai' ? API_DEMOS.slice(0, 2) : variant === 'providers' ? API_DEMOS.slice(2) : API_DEMOS
   const [activeIndex, setActiveIndex] = useState(0)
   const [transitioning, setTransitioning] = useState(false)
   const intervalRef = useRef<ReturnType<typeof setInterval>>(undefined)
@@ -135,7 +105,7 @@ export function HeroTerminalDemo() {
     intervalRef.current = setInterval(() => {
       setTransitioning(true)
       timeoutRef.current = setTimeout(() => {
-        setActiveIndex((prev) => (prev + 1) % API_DEMOS.length)
+        setActiveIndex((prev) => (prev + 1) % demos.length)
         setTransitioning(false)
       }, TRANSITION_MS)
     }, CYCLE_INTERVAL)
@@ -144,7 +114,7 @@ export function HeroTerminalDemo() {
       if (intervalRef.current) clearInterval(intervalRef.current)
       if (timeoutRef.current) clearTimeout(timeoutRef.current)
     }
-  }, [])
+  }, [demos.length])
 
   const handleSelect = (index: number) => {
     if (index === activeIndex) return
@@ -157,7 +127,7 @@ export function HeroTerminalDemo() {
     }, TRANSITION_MS)
   }
 
-  const demo = API_DEMOS[activeIndex]
+  const demo = demos[activeIndex]
 
   return (
     <div className='mx-auto w-full max-w-2xl'>
@@ -175,7 +145,7 @@ export function HeroTerminalDemo() {
             'border-border/50 dark:border-white/[0.05]'
           )}
         >
-          {API_DEMOS.map((item, index) => {
+          {demos.map((item, index) => {
             const isActive = index === activeIndex
             return (
               <button

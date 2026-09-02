@@ -49,7 +49,9 @@ i18n
       escapeValue: false, // not needed for react as it escapes by default
     },
     detection: {
-      order: ['localStorage', 'navigator'],
+      // English is the deterministic first-visit default. Once a user picks
+      // a language it is persisted locally and restored on subsequent visits.
+      order: ['localStorage'],
       caches: ['localStorage'],
     },
   })

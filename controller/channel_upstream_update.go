@@ -32,6 +32,16 @@ const (
 	channelUpstreamModelUpdateNotifyMaxFailedChannelIDs   = 10
 )
 
+// Models in this denylist are intentionally removed from channel model lists.
+// They must not be re-added by the periodic upstream model auto-sync. Casing
+// is significant: the supported MiniMax-M2.7/M3 display variants remain
+// available while these deprecated lowercase/custom entries stay excluded.
+var upstreamModelHardExclusions = map[string]struct{}{
+	"minimax-m2.7":           {},
+	"minimax-m3":             {},
+	"comfyui-minimax-h3-r2v": {},
+}
+
 var channelUpstreamModelUpdateSelectFields = []string{
 	"id",
 	"name",
@@ -208,6 +218,9 @@ func collectPendingUpstreamModelChangesFromModels(
 	}
 
 	pendingAdd := lo.Filter(upstreamModels, func(modelName string, _ int) bool {
+		if _, excluded := upstreamModelHardExclusions[strings.TrimSpace(modelName)]; excluded {
+			return false
+		}
 		if _, ok := coveredUpstreamSet[modelName]; ok {
 			return false
 		}

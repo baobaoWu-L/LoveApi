@@ -1,6 +1,7 @@
 package model
 
 import (
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -74,8 +75,14 @@ func SaveQuotaDataCache() {
 	// 3. 如果没有数据，就插入数据
 	for _, quotaData := range CacheQuotaData {
 		quotaDataDB := &QuotaData{}
-		DB.Table("quota_data").Where("user_id = ? and username = ? and model_name = ? and created_at = ?",
-			quotaData.UserID, quotaData.Username, quotaData.ModelName, quotaData.CreatedAt).First(quotaDataDB)
+		// Find returns a nil error for an empty result. A missing hourly row is
+		// the normal first-write path and must not be logged as an application
+		// error by GORM's First/record-not-found handling.
+		err := DB.Table("quota_data").Where("user_id = ? and username = ? and model_name = ? and created_at = ?",
+			quotaData.UserID, quotaData.Username, quotaData.ModelName, quotaData.CreatedAt).Find(quotaDataDB).Error
+		if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+			common.SysLog(fmt.Sprintf("query quota_data error: %s", err))
+		}
 		if quotaDataDB.Id > 0 {
 			//quotaDataDB.Count += quotaData.Count
 			//quotaDataDB.Quota += quotaData.Quota

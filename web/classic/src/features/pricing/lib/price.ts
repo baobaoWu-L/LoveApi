@@ -53,6 +53,14 @@ export function stripTrailingZeros(formatted: string): string {
 }
 
 /**
+ * 模型价格显示统一格式：最多两位小数（四舍五入/进位，避免 $4.9999 这类长尾数），
+ * 非整数补 0 到三位小数（如 $1.7 → $1.700、$0.07 → $0.070），整数保持不变（$5）。
+ */
+export function padPriceToThree(formatted: string): string {
+  return formatted.replace(/(\.\d+)/, (m) => m.padEnd(4, '0'))
+}
+
+/**
  * Find minimum group ratio from enabled groups
  */
 function getMinGroupRatio(
@@ -187,11 +195,9 @@ export function formatPrice(
   )
 
   const price = priceInUSD / TOKEN_UNIT_DIVISORS[tokenUnit]
-  return formatCurrencyFromUSD(price, {
-    digitsLarge: 4,
-    digitsSmall: 6,
-    abbreviate: false,
-  })
+  return padPriceToThree(
+    formatCurrencyFromUSD(price, { digitsLarge: 2, digitsSmall: 2, abbreviate: false })
+  )
 }
 
 /**
@@ -222,11 +228,9 @@ export function formatGroupPrice(
   )
 
   const price = priceInUSD / TOKEN_UNIT_DIVISORS[tokenUnit]
-  return formatCurrencyFromUSD(price, {
-    digitsLarge: 4,
-    digitsSmall: 6,
-    abbreviate: false,
-  })
+  return padPriceToThree(
+    formatCurrencyFromUSD(price, { digitsLarge: 2, digitsSmall: 2, abbreviate: false })
+  )
 }
 
 /**
@@ -254,11 +258,9 @@ export function formatFixedPrice(
     usdExchangeRate
   )
 
-  return formatCurrencyFromUSD(priceInUSD, {
-    digitsLarge: 4,
-    digitsSmall: 4,
-    abbreviate: false,
-  })
+  return padPriceToThree(
+    formatCurrencyFromUSD(priceInUSD, { digitsLarge: 2, digitsSmall: 2, abbreviate: false })
+  )
 }
 
 /**
@@ -289,9 +291,7 @@ export function formatRequestPrice(
     usdExchangeRate
   )
 
-  return formatCurrencyFromUSD(priceInUSD, {
-    digitsLarge: 4,
-    digitsSmall: 4,
-    abbreviate: false,
-  })
+  return padPriceToThree(
+    formatCurrencyFromUSD(priceInUSD, { digitsLarge: 2, digitsSmall: 2, abbreviate: false })
+  )
 }

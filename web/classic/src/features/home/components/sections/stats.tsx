@@ -18,6 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { useRef, useEffect, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
+import { usePricingData } from '@/features/pricing/hooks/use-pricing-data'
 
 interface CounterProps {
   end: number
@@ -96,12 +97,22 @@ interface StatItem {
 
 export function Stats(_props: StatsProps) {
   const { t } = useTranslation()
+  const { models, vendors } = usePricingData()
+
+  const modelCount = models?.length ?? 0
+  const providerCount = vendors?.length ?? 0
+  const protocolCount = new Set(
+    (models ?? []).flatMap((model) => model.supported_endpoint_types ?? [])
+  ).size
+  const groupCount = new Set(
+    (models ?? []).flatMap((model) => model.enable_groups ?? [])
+  ).size
 
   const stats: StatItem[] = [
-    { end: 50, suffix: '+', label: t('upstream services integrated') },
-    { end: 100, suffix: '+', label: t('model billing support') },
-    { end: 50, suffix: '+', label: t('compatible API routes') },
-    { end: 10, suffix: '+', label: t('scheduling controls') },
+    { end: providerCount, suffix: '+', label: t('Upstream providers') },
+    { end: modelCount, suffix: '+', label: t('Enabled models') },
+    { end: protocolCount, suffix: '+', label: t('Compatible API protocols') },
+    { end: groupCount, suffix: '+', label: t('Routing groups') },
   ]
 
   return (

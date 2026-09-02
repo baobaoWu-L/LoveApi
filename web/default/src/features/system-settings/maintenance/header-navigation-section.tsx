@@ -173,7 +173,7 @@ export function HeaderNavigationSection({
     },
     {
       key: 'apiDoc',
-      title: 'API 文档',
+      title: t('API Documentation'),
       description: 'API 接口文档和技术指南。',
     },
   ]

@@ -43,6 +43,9 @@ func ImageHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *type
 		return types.NewError(fmt.Errorf("invalid api type: %d", info.ApiType), types.ErrorCodeInvalidApiType, types.ErrOptionWithSkipRetry())
 	}
 	adaptor.Init(info)
+	if common.DebugEnabled {
+		logger.LogDebug(c, fmt.Sprintf("image relay dispatch: channel=%d origin_model=%s upstream_model=%s mode=%d has_reference=%t", info.ChannelId, info.OriginModelName, info.UpstreamModelName, info.RelayMode, len(request.Images) > 0 || len(request.Image) > 0))
+	}
 
 	var requestBody io.Reader
 
@@ -77,7 +80,7 @@ func ImageHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *type
 			}
 
 			if common.DebugEnabled {
-				logger.LogDebug(c, fmt.Sprintf("image request body: %s", string(jsonData)))
+				logger.LogDebug(c, fmt.Sprintf("image request metadata: model=%s size=%s aspect_ratio=%s resolution_tier=%s reference_images=%d", request.Model, request.Size, request.AspectRatio, request.ResolutionTier(), imageReferenceCount(request.Images)))
 			}
 			requestBody = bytes.NewBuffer(jsonData)
 		}
@@ -176,4 +179,15 @@ func ImageHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *type
 
 	service.PostTextConsumeQuota(c, info, usage.(*dto.Usage), logContent)
 	return nil
+}
+
+func imageReferenceCount(raw []byte) int {
+	if len(raw) == 0 {
+		return 0
+	}
+	var values []any
+	if err := common.Unmarshal(raw, &values); err == nil {
+		return len(values)
+	}
+	return 1
 }

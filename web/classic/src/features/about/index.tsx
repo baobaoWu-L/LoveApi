@@ -25,7 +25,6 @@ import { PublicLayout } from '@/components/layout'
 import { PastelBackdrop } from '@/components/pastel-backdrop'
 import { GsapReveal } from '@/components/gsap-reveal'
 import { getAboutContent } from './api'
-import { getPrivacyPolicy, getUserAgreement } from '../legal/api'
 
 function isValidUrl(value: string) {
   try {
@@ -40,38 +39,7 @@ function isLikelyHtml(value: string) {
   return /<\/?[a-z][\s\S]*>/i.test(value)
 }
 
-function LegalPreview({ title, content }: { title: string; content: string }) {
-  const trimmed = content.trim()
-  const isUrl = isValidUrl(trimmed)
-
-  return (
-    <section className='border-border/60 bg-background/60 rounded-xl border p-5 text-left shadow-sm'>
-      <h3 className='text-lg font-semibold'>{title}</h3>
-      {isUrl ? (
-        <a
-          href={trimmed}
-          target='_blank'
-          rel='noopener noreferrer'
-          className='text-primary mt-2 inline-block text-sm underline underline-offset-4'
-        >
-          {trimmed}
-        </a>
-      ) : (
-        <Markdown className='prose-neutral dark:prose-invert mt-3 max-w-none text-sm'>
-          {trimmed}
-        </Markdown>
-      )}
-    </section>
-  )
-}
-
-function EmptyAboutState({
-  userAgreement,
-  privacyPolicy,
-}: {
-  userAgreement: string
-  privacyPolicy: string
-}) {
+function EmptyAboutState() {
   const { t } = useTranslation()
   const currentYear = new Date().getFullYear()
 
@@ -135,18 +103,6 @@ function EmptyAboutState({
         </div>
       </div>
 
-      <div className='space-y-4'>
-        <div>
-          <h2 className='text-2xl font-semibold tracking-tight'>
-            {t('Legal Terms')}
-          </h2>
-          <p className='text-muted-foreground mt-1 text-sm'>
-            {t('Please review these terms before creating an account.')}
-          </p>
-        </div>
-        <LegalPreview title={t('User Agreement')} content={userAgreement} />
-        <LegalPreview title={t('Privacy Policy')} content={privacyPolicy} />
-      </div>
     </div>
   )
 }
@@ -157,17 +113,6 @@ export function About() {
     queryKey: ['about-content'],
     queryFn: getAboutContent,
   })
-  const { data: agreementData } = useQuery({
-    queryKey: ['user-agreement'],
-    queryFn: getUserAgreement,
-    staleTime: 10 * 60 * 1000,
-  })
-  const { data: privacyData } = useQuery({
-    queryKey: ['privacy-policy'],
-    queryFn: getPrivacyPolicy,
-    staleTime: 10 * 60 * 1000,
-  })
-
   const rawContent = data?.data?.trim() ?? ''
   const hasContent = rawContent.length > 0
   const isUrl = hasContent && isValidUrl(rawContent)
@@ -201,10 +146,7 @@ export function About() {
                 <Skeleton className='h-4 w-[80%]' />
               </div>
             ) : !hasContent ? (
-              <EmptyAboutState
-                userAgreement={agreementData?.data ?? ''}
-                privacyPolicy={privacyData?.data ?? ''}
-              />
+              <EmptyAboutState />
             ) : isUrl ? (
               <iframe
                 src={rawContent}

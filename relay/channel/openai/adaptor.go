@@ -445,13 +445,27 @@ func (a *Adaptor) ConvertImageRequest(c *gin.Context, info *relaycommon.RelayInf
 
 		// 写入所有非文件字段
 		if mf != nil {
+			// Some Go/Gin versions expose multipart values only through
+			// MultipartForm.Value. Ensure the upstream always receives the
+			// selected model instead of an empty model field.
+			if request.Model == "" && len(mf.Value["model"]) > 0 {
+				request.Model = mf.Value["model"][0]
+			}
 			for key, values := range mf.Value {
-				if key == "model" {
+				// Use the validated/normalized request values below. Forwarding the
+				// raw pixel size here would bypass GPT Image 2's ratio normalization.
+				if key == "model" || key == "size" || key == "aspect_ratio" {
 					continue
 				}
 				for _, value := range values {
 					writer.WriteField(key, value)
 				}
+			}
+			if request.Size != "" {
+				writer.WriteField("size", request.Size)
+			}
+			if request.AspectRatio != "" {
+				writer.WriteField("aspect_ratio", request.AspectRatio)
 			}
 		}
 

@@ -27,6 +27,7 @@ func GetAllLogs(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
+	sanitizeLogsForClient(logs)
 	pageInfo.SetTotal(int(total))
 	pageInfo.SetItems(logs)
 	common.ApiSuccess(c, pageInfo)
@@ -49,6 +50,7 @@ func GetUserLogs(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
+	sanitizeLogsForClient(logs)
 	pageInfo.SetTotal(int(total))
 	pageInfo.SetItems(logs)
 	common.ApiSuccess(c, pageInfo)
@@ -170,4 +172,23 @@ func DeleteHistoryLogs(c *gin.Context) {
 		"data":    count,
 	})
 	return
+}
+
+// sanitizeLogsForClient 脱敏日志，避免在「使用日志」接口中泄露上游信息。
+// 仅清理客户端展示层数据，不修改数据库原始记录。
+func sanitizeLogsForClient(logs []*model.Log) {
+	for _, log := range logs {
+		// 上游请求 ID、渠道、渠道名称均不返回给前端。
+		log.UpstreamRequestId = ""
+		log.ChannelId = 0
+		log.ChannelName = ""
+		// Other 中的上游重试链路与计费来源（上游返回/Local 标记）不外泄。
+		if otherMap, err := common.StrToMap(log.Other); err == nil && len(otherMap) > 0 {
+			if adminInfo, ok := otherMap["admin_info"].(map[string]interface{}); ok {
+				delete(adminInfo, "use_channel")
+				delete(adminInfo, "local_count_tokens")
+			}
+			log.Other = common.MapToJsonStr(otherMap)
+		}
+	}
 }

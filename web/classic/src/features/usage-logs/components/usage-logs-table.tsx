@@ -16,13 +16,15 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { useEffect } from 'react'
+import { Fragment, useEffect, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { getRouteApi } from '@tanstack/react-router'
 import {
   type ColumnDef,
+  type ExpandedState,
   flexRender,
   getCoreRowModel,
+  getExpandedRowModel,
   getFacetedRowModel,
   getFacetedUniqueValues,
   getFilteredRowModel,
@@ -36,11 +38,13 @@ import { cn } from '@/lib/utils'
 import { useIsAdmin } from '@/hooks/use-admin'
 import { useTableUrlState } from '@/hooks/use-table-url-state'
 import { TableCell, TableRow } from '@/components/ui/table'
+import { InlineLogDetails } from './inline-log-details'
 import { DataTablePage } from '@/components/data-table'
 import { DEFAULT_LOGS_DATA, LOG_TYPE_ENUM } from '../constants'
 import { useColumnsByCategory } from '../lib/columns'
 import { fetchLogsByCategory } from '../lib/utils'
 import type { LogCategory } from '../types'
+import type { UsageLog } from '../data/schema'
 import { CommonLogsFilterBar } from './common-logs-filter-bar'
 import { TaskLogsFilterBar } from './task-logs-filter-bar'
 
@@ -133,6 +137,7 @@ export function UsageLogsTable({ logCategory }: UsageLogsTableProps) {
   const logs = data?.items || []
   const columns = useColumnsByCategory(logCategory, isAdmin)
   const isLoadingData = isLoading || (isFetching && !data)
+  const [expanded, setExpanded] = useState<ExpandedState>({})
 
   const table = useReactTable({
     data: logs as Record<string, unknown>[],
@@ -140,11 +145,15 @@ export function UsageLogsTable({ logCategory }: UsageLogsTableProps) {
     state: {
       columnFilters,
       pagination,
+      expanded,
     },
     enableRowSelection: false,
     onPaginationChange,
     onColumnFiltersChange,
+    onExpandedChange: setExpanded,
+    getRowId: (row) => String((row as Record<string, unknown>).id ?? row.id),
     getCoreRowModel: getCoreRowModel(),
+    getExpandedRowModel: getExpandedRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
     getFacetedRowModel: getFacetedRowModel(),
@@ -186,15 +195,46 @@ export function UsageLogsTable({ logCategory }: UsageLogsTableProps) {
           | undefined
         const tintClass =
           isCommon && logType != null ? (logTypeRowTint[logType] ?? '') : ''
+        // 行内展开仅用于通用日志；绘图/任务日志保持原单行渲染，避免类型不匹配。
+        if (!isCommon) {
+          return (
+            <TableRow key={row.id} className={cn('transition-colors', tintClass)}>
+              {row.getVisibleCells().map((cell) => (
+                <TableCell key={cell.id} className='py-3.5'>
+                  {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                </TableCell>
+              ))}
+            </TableRow>
+          )
+        }
+        const isExpanded = row.getIsExpanded()
 
         return (
-          <TableRow key={row.id} className={cn('transition-colors', tintClass)}>
-            {row.getVisibleCells().map((cell) => (
-              <TableCell key={cell.id} className={isCommon ? 'py-2' : 'py-3.5'}>
-                {flexRender(cell.column.columnDef.cell, cell.getContext())}
-              </TableCell>
-            ))}
-          </TableRow>
+          <Fragment key={row.id}>
+            <TableRow
+              onClick={row.getToggleExpandedHandler()}
+              className={cn(
+                'cursor-pointer transition-colors',
+                tintClass,
+                isExpanded && 'bg-muted/50'
+              )}
+            >
+              {row.getVisibleCells().map((cell) => (
+                <TableCell key={cell.id} className={isCommon ? 'py-2' : 'py-3.5'}>
+                  {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                </TableCell>
+              ))}
+            </TableRow>
+            {isExpanded && (
+              <TableRow className='bg-muted/30'>
+                <TableCell colSpan={row.getVisibleCells().length} className='p-0'>
+                  <InlineLogDetails
+                    log={row.original as unknown as UsageLog}
+                  />
+                </TableCell>
+              </TableRow>
+            )}
+          </Fragment>
         )
       }}
     />

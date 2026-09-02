@@ -105,7 +105,7 @@ export function Hero(props: HeroProps) {
                 className='rounded-full border-foreground/20 px-5 hover:bg-foreground/5 whitespace-nowrap'
                 render={<Link to='/api-doc' />}
               >
-                API 文档
+                {t('API Documentation')}
               </Button>
             </>
           )}
@@ -113,12 +113,15 @@ export function Hero(props: HeroProps) {
       </div>
 
       <motion.div
-        className='landing-animate-fade-up mt-16 w-full max-w-3xl opacity-0'
+        className='landing-animate-fade-up mt-16 w-full max-w-6xl opacity-0'
         style={{ animationDelay: '300ms' }}
         whileHover={{ scale: 1.01 }}
         transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
       >
-        <HeroTerminalDemo />
+        <div className='grid w-full gap-5 md:grid-cols-2'>
+          <HeroTerminalDemo variant='openai' />
+          <HeroTerminalDemo variant='providers' />
+        </div>
       </motion.div>
     </section>
   )

@@ -182,6 +182,10 @@ func ModelPriceHelper(c *gin.Context, info *relaycommon.RelayInfo, promptTokens 
 // ModelPriceHelperPerCall 按次/按量计费的 PriceHelper (MJ、Task)
 func ModelPriceHelperPerCall(c *gin.Context, info *relaycommon.RelayInfo) (types.PriceData, error) {
 	groupRatioInfo := HandleGroupRatio(c, info)
+	// 按次计费(固定价格)的 modelPrice 即为每次最终美元价，不再叠加分组倍率。
+	groupRatioInfo.GroupRatio = 1
+	groupRatioInfo.GroupSpecialRatio = -1
+	groupRatioInfo.HasSpecialRatio = false
 
 	modelPrice, success := ratio_setting.GetModelPrice(info.OriginModelName, true)
 	usePrice := success
@@ -255,6 +259,12 @@ func HasModelBillingConfig(modelName string) bool {
 }
 
 func modelPriceHelperTiered(c *gin.Context, info *relaycommon.RelayInfo, promptTokens int, meta *types.TokenCountMeta, groupRatioInfo types.GroupRatioInfo) (types.PriceData, error) {
+	// 特殊计费(分档表达式)的系数本身即为最终 $/1M 售价，结算不再叠加分组倍率，
+	// 保证「展示价 = 实扣 = 表达式系数」，避免分组倍率(1.2/1.5/10)把价格放大。
+	groupRatioInfo.GroupRatio = 1
+	groupRatioInfo.GroupSpecialRatio = -1
+	groupRatioInfo.HasSpecialRatio = false
+
 	exprStr, ok := billing_setting.GetBillingExprForGroup(info.OriginModelName, info.UsingGroup)
 	if !ok {
 		return types.PriceData{}, fmt.Errorf("model %s is configured as tiered_expr but has no billing expression", info.OriginModelName)

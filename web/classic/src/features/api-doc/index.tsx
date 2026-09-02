@@ -17,6 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { useState, useEffect, useMemo } from 'react'
+import { useTranslation } from 'react-i18next'
 import { CopyButton } from '@/components/copy-button'
 import { Badge } from '@/components/ui/badge'
 import { Card } from '@/components/ui/card'
@@ -58,17 +59,17 @@ const SECTION_IDS: SectionId[] = [
 ]
 
 const SECTION_TITLES: Record<SectionId, string> = {
-  intro: '引言',
-  'quick-start': '快速接入',
-  codex: 'Codex（ChatGPT）配置',
-  claude: 'Claude 配置',
-  deepseek: 'DeepSeek 配置',
-  qwen: 'Qwen（通义千问）配置',
-  ccswitch: 'CC Switch 接入',
-  models: '支持模型',
-  endpoints: 'API 端点',
-  examples: '代码示例',
-  errors: '错误码说明',
+  intro: 'Introduction',
+  'quick-start': 'Quick start',
+  codex: 'Codex (ChatGPT) configuration',
+  claude: 'Claude configuration',
+  deepseek: 'DeepSeek configuration',
+  qwen: 'Qwen configuration',
+  ccswitch: 'CC Switch integration',
+  models: 'Supported models',
+  endpoints: 'API endpoints',
+  examples: 'Code examples',
+  errors: 'Error codes',
 }
 
 type NavItem = { id: SectionId; label: string; icon: string }
@@ -76,29 +77,29 @@ type NavGroup = { title: string; items: NavItem[] }
 
 const NAV_GROUPS: NavGroup[] = [
   {
-    title: '开始',
+    title: 'Getting started',
     items: [
-      { id: 'intro', label: '引言', icon: '📖' },
-      { id: 'quick-start', label: '快速接入', icon: '🚀' },
+      { id: 'intro', label: 'Introduction', icon: '📖' },
+      { id: 'quick-start', label: 'Quick start', icon: '🚀' },
     ],
   },
   {
-    title: '模型配置',
+    title: 'Model configuration',
     items: [
-      { id: 'codex', label: 'Codex（ChatGPT）', icon: '🤖' },
+      { id: 'codex', label: 'Codex (ChatGPT)', icon: '🤖' },
       { id: 'claude', label: 'Claude', icon: '🗣️' },
       { id: 'deepseek', label: 'DeepSeek', icon: '🐋' },
-      { id: 'qwen', label: 'Qwen（通义千问）', icon: '💫' },
-      { id: 'ccswitch', label: 'CC Switch 接入', icon: '🔧' },
+      { id: 'qwen', label: 'Qwen', icon: '💫' },
+      { id: 'ccswitch', label: 'CC Switch integration', icon: '🔧' },
     ],
   },
   {
-    title: '参考',
+    title: 'Reference',
     items: [
-      { id: 'models', label: '支持模型', icon: '🧠' },
-      { id: 'endpoints', label: 'API 端点', icon: '📡' },
-      { id: 'examples', label: '代码示例', icon: '💻' },
-      { id: 'errors', label: '错误码说明', icon: '⚠️' },
+      { id: 'models', label: 'Supported models', icon: '🧠' },
+      { id: 'endpoints', label: 'API endpoints', icon: '📡' },
+      { id: 'examples', label: 'Code examples', icon: '💻' },
+      { id: 'errors', label: 'Error codes', icon: '⚠️' },
     ],
   },
 ]
@@ -130,6 +131,7 @@ function useActiveSection(ids: readonly string[]) {
 
 function CodeBlock({ code, lang = 'json' }: { code: string; lang?: string }) {
   const { copyToClipboard } = useCopyToClipboard()
+  const { t } = useTranslation()
 
   return (
     <div className='overflow-hidden rounded-lg border'>
@@ -142,7 +144,7 @@ function CodeBlock({ code, lang = 'json' }: { code: string; lang?: string }) {
           className='text-muted-foreground hover:text-foreground flex items-center gap-1 text-xs transition-colors'
         >
           <Copy className='size-3' />
-          复制
+          {t('Copy')}
         </button>
       </div>
       <pre className='bg-muted/40 overflow-x-auto rounded-md border p-4'>
@@ -192,15 +194,15 @@ function ConfigField({ code, text }: { code: string; text: string }) {
 // ===== Codex 子模型锁定注意事项（模型广场同款，统一格式）=====
 
 function CodexSubagentNote() {
+  const { t } = useTranslation()
   return (
     <div className='rounded-lg border border-rose-300/70 bg-rose-50/70 p-3 text-xs leading-relaxed text-rose-700 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-300'>
-      <strong>⚠️ Codex（ChatGPT）接入注意：</strong>不加下面锁定配置时，<em>主对话</em>用的是你选择的模型，
-      但 Codex 的 agent 运行时会调用<em>子模型</em>，可能命中其它模型（具体情况请看 控制台 → 使用日志）。
-      想让主对话与子模型都用同一个模型（gpt-5.6-sol），把下面这段配置写入{' '}
+      <strong>⚠️ {t('Codex integration note')}:</strong> {t('Without the lock settings below, the main conversation uses your selected model, but Codex agents may call a different submodel. Check Console → Usage logs for details.')}{' '}
+      {t('To use the same model (gpt-5.6-sol) for the main conversation and subagents, write the following to')}{' '}
       <code className='bg-muted rounded px-1 py-0.5 font-mono text-[10px]'>~/.codex/config.toml</code>{' '}
-      ，并用{' '}
+      {t('and start with')}{' '}
       <code className='bg-muted rounded px-1 py-0.5 font-mono text-[10px]'>codex -p loveapi</code>{' '}
-      启动：
+      :
       <pre className='mt-2 overflow-x-auto rounded-md bg-rose-50 p-2 font-mono text-[10px] leading-relaxed text-rose-800 dark:bg-rose-950/40 dark:text-rose-100'>
 {`model = "gpt-5.6-sol"
 review_model = "gpt-5.6-sol"
@@ -211,9 +213,9 @@ default_subagent_model = "gpt-5.6-sol"
 model = "gpt-5.6-sol"
 model_provider = "loveapi"`}
       </pre>
-      <span>可修改的地方：把上面的 gpt-5.6-sol 全部替换成你选定的模型名即可（model、review_model、default_subagent_model、profiles.loveapi.model 四处要一致）。</span>
+      <span>{t('Replace every gpt-5.6-sol above with your chosen model name; model, review_model, default_subagent_model, and profiles.loveapi.model must match.')}</span>
       <br />
-      <span>扣费按实际调用的模型价格结算：选择高级模型不会按高级价格去扣低级模型的额度；调用哪个模型就按哪个模型的额度扣，请放心。</span>
+      <span>{t('Billing always follows the model actually called; each request consumes the corresponding model quota.')}</span>
     </div>
   )
 }
@@ -269,6 +271,7 @@ function EndpointCard({
 // ===== 主页面 =====
 
 export function ApiDoc() {
+  const { t } = useTranslation()
   const [query, setQuery] = useState('')
   const [mobileOpen, setMobileOpen] = useState(false)
   const active = useActiveSection(SECTION_IDS)
@@ -301,7 +304,7 @@ export function ApiDoc() {
             className='bg-background/80 border-border/40 text-muted-foreground focus-visible:ring-ring inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-medium backdrop-blur-xl transition-colors focus-visible:ring-1'
           >
             <List className='size-4' />
-            {mobileOpen ? '收起目录' : '文档目录'}
+            {mobileOpen ? t('Close contents') : t('Document contents')}
           </button>
           {mobileOpen && (
             <div className='bg-background/90 border-border/40 mt-2 max-h-[70dvh] overflow-y-auto rounded-2xl border p-3 backdrop-blur-xl'>
@@ -315,7 +318,7 @@ export function ApiDoc() {
                     active === item.id && 'text-foreground bg-muted/50 font-medium'
                   )}
                 >
-                  {item.label}
+                  {t(item.label)}
                 </a>
               ))}
             </div>
@@ -342,7 +345,7 @@ export function ApiDoc() {
                     <Input
                       value={query}
                       onChange={(e) => setQuery(e.target.value)}
-                      placeholder='搜索文档...'
+                      placeholder={t('Search documentation...')}
                       className='bg-background/50 border-border/50 ps-9'
                     />
                   </div>
@@ -351,7 +354,7 @@ export function ApiDoc() {
                     {filteredGroups.map((group) => (
                       <div key={group.title}>
                         <div className='text-muted-foreground pb-1.5 text-xs font-semibold tracking-wider uppercase'>
-                          {group.title}
+                          {t(group.title)}
                         </div>
                         <ul className='space-y-0.5'>
                           {group.items.map((item) => (
@@ -364,7 +367,7 @@ export function ApiDoc() {
                                     'text-foreground bg-muted/70 font-medium'
                                 )}
                               >
-                                {item.label}
+                          {t(item.label)}
                               </a>
                             </li>
                           ))}
@@ -388,23 +391,23 @@ export function ApiDoc() {
                       API Reference
                     </span>
                     <h1 className='text-4xl leading-tight font-bold tracking-tight sm:text-5xl'>
-                      Love Api 接口文档
+                      {t('LoveAPI API documentation')}
                     </h1>
                     <p className='text-muted-foreground max-w-2xl leading-relaxed'>
-                      统一的大模型 API 网关，完全兼容 OpenAI 协议格式。一套接口即可接入 OpenAI、Anthropic（Claude）、DeepSeek、Qwen 等主流大模型，无需为每个供应商单独适配。
+                      {t('A unified AI model API gateway, fully compatible with the OpenAI protocol. One integration connects leading OpenAI, Anthropic (Claude), DeepSeek, and Qwen models without separate adapters.')}
                     </p>
                   </header>
 
                   {/* 1. 引言 */}
-                  <Section id='intro' icon='📖' title={SECTION_TITLES.intro}>
+                  <Section id='intro' icon='📖' title={t(SECTION_TITLES.intro)}>
                     <p className='text-muted-foreground text-sm leading-relaxed'>
-                      Love Api 提供了与 OpenAI 完全兼容的接口，您只需把原有客户端的 Base URL 和 API Key 替换为 Love Api 的凭证，即可用同一套协议调用多家大模型，并在渠道间自动路由。
+                      {t('LoveAPI provides an OpenAI-compatible API. Replace your client Base URL and API key to call multiple models through one protocol with automatic channel routing.')}
                     </p>
                     <div className='grid gap-3 sm:grid-cols-3'>
                       {[
-                        { t: '开放性', d: '兼容 OpenAI / Anthropic 协议' },
-                        { t: '一体化', d: '统一配额、计费与密钥' },
-                        { t: '自动路由', d: '多渠道负载均衡与容灾' },
+                        { t: t('Open compatibility'), d: t('Compatible with OpenAI and Anthropic protocols') },
+                        { t: t('Unified management'), d: t('Unified quota, billing, and keys') },
+                        { t: t('Automatic routing'), d: t('Multi-channel load balancing and failover') },
                       ].map((c) => (
                         <div
                           key={c.t}
@@ -426,13 +429,13 @@ export function ApiDoc() {
                     title={SECTION_TITLES['quick-start']}
                   >
                     <p className='text-muted-foreground text-sm leading-relaxed'>
-                      将原有 API 调用的 Base URL 和 Authorization 头部替换成 Love Api 的凭证即可。
+                      {t('Replace the Base URL and Authorization header in your existing API calls with your LoveAPI credentials.')}
                     </p>
                     <Card className='border-primary/20 bg-primary/5 p-4 space-y-3'>
                       <div className='flex flex-wrap items-center justify-between gap-4'>
                         <div className='space-y-1'>
                           <div className='text-muted-foreground text-xs font-medium'>
-                            Base URL（服务器地址）
+                            {t('Base URL (server address)')}
                           </div>
                           <code className='bg-background text-primary inline-block rounded border px-3 py-1.5 text-sm font-semibold break-all'>
                             {serverAddress}
@@ -444,12 +447,11 @@ export function ApiDoc() {
                     <div className='bg-muted/50 border-border/50 flex items-start gap-3 rounded-lg p-4 text-sm'>
                       <span className='text-lg'>💡</span>
                       <div className='text-muted-foreground space-y-1'>
-                        <strong className='text-foreground'>提示：</strong>
-                        请求时需要在 Header 中添加{' '}
+                        <strong className='text-foreground'>{t('Tip')}:</strong>{' '}
+                        {t('Include Authorization: Bearer <your_api_key> in the request header. Find your key in the console under API keys.')}{' '}
                         <code className='bg-muted rounded px-1 text-xs'>
                           Authorization: Bearer &lt;your_api_key&gt;
                         </code>
-                        。您可以在控制台 → API 密钥 中获取您的密钥。
                       </div>
                     </div>
                   </Section>
@@ -458,18 +460,17 @@ export function ApiDoc() {
                   <Section
                     id='codex'
                     icon='🤖'
-                    title={SECTION_TITLES.codex}
+                    title={t(SECTION_TITLES.codex)}
                   >
                     <p className='text-muted-foreground text-sm leading-relaxed'>
-                      在 <code className='bg-muted rounded px-1 text-xs'>~/.codex/config.toml</code>{' '}
-                      与 <code className='bg-muted rounded px-1 text-xs'>~/.codex/auth.json</code>{' '}
-                      中配置 Love Api 作为 Codex（ChatGPT）桌面端 / CLI 的模型提供方
-                      （密钥请在控制台 → API 密钥 里创建{' '}
-                      <code className='bg-muted rounded px-1 text-xs'>sk-</code>{' '}
-                      开头的令牌）：
+                      {t('Configure LoveAPI as the Codex (ChatGPT) desktop or CLI provider in')}{' '}
+                      <code className='bg-muted rounded px-1 text-xs'>~/.codex/config.toml</code>{' '}
+                      {t('and')}{' '}
+                      <code className='bg-muted rounded px-1 text-xs'>~/.codex/auth.json</code>{' '}
+                      {t('(create an sk- token in Console → API keys)')}:
                     </p>
                     <div className='text-xs font-semibold text-muted-foreground'>
-                      ① 模型提供方 / 运行配置
+                      {t('① Model provider and runtime configuration')}
                     </div>
                     <CodeBlock
                       code={`# 切换模型无需改此文件：直接在 Codex 桌面端选择，选中哪个就用哪个（不会自动路由到其它模型）
@@ -513,7 +514,7 @@ model_provider = "loveapi"`}
                       lang='toml'
                     />
                     <div className='text-xs font-semibold text-muted-foreground'>
-                      ② 密钥文件：~/.codex/auth.json
+                      {t('② Credential file: ~/.codex/auth.json')}
                     </div>
                     <CodeBlock
                       code={JSON.stringify(
@@ -527,49 +528,49 @@ model_provider = "loveapi"`}
                     />
                     <p className='text-xs leading-relaxed text-muted-foreground'>
                       <code className='bg-muted rounded px-1 text-xs'>~/.codex/auth.json</code>{' '}
-                      中的{' '}
+                      {t('in')}{' '}
                       <code className='bg-muted rounded px-1 text-xs'>OPENAI_API_KEY</code>{' '}
-                      请替换为控制台里{' '}
+                      {t('Replace it with the real token from Console → API keys')}{' '}
                       <code className='bg-muted rounded px-1 text-xs'>sk-</code>{' '}
-                      开头的真实密钥，否则无法通过鉴权。
+                      {t('starting with sk-, otherwise authentication will fail.')}
                     </p>
                     <div className='rounded-lg border border-amber-200/70 bg-amber-50/70 p-3 text-xs leading-relaxed text-amber-700 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-300'>
-                      <strong>固定只用一个模型：</strong>
-                      主对话模型用{' '}
+                      <strong>{t('Use one fixed model:')}</strong>
+                      {t('The main conversation uses')}{' '}
                       <code className='bg-muted mx-1 rounded px-1'>[profiles.loveapi]</code>{' '}
-                      固化，并用{' '}
+                      {t('to pin the model and start with')}{' '}
                       <code className='bg-muted mx-1 rounded px-1'>codex -p loveapi</code>{' '}
-                      启动。同时还必须把{' '}
+                      {t('. Also pin')}{' '}
                       <code className='bg-muted mx-1 rounded px-1'>review_model</code>{' '}
-                      和{' '}
+                      {t('and')}{' '}
                       <code className='bg-muted mx-1 rounded px-1'>agents.default_subagent_model</code>{' '}
-                      一并固定为上面同一个{' '}
+                      {t('to the same model')}{' '}
                       <code className='bg-muted mx-1 rounded px-1'>gpt-5.6-sol</code>{' '}
-                      （否则 <code className='bg-muted mx-1 rounded px-1'>/review</code> 代码审查、多代理子任务仍会各自去调用其它模型，例如{' '}
-                      <code className='bg-muted mx-1 rounded px-1'>gpt-5.6-terra</code>）。只要保持这三处一致，Codex 就不会切换 / 跨模型调用其它模型。
+                      {t('(otherwise /review and subagent tasks may call other models, such as')}{' '}
+                      <code className='bg-muted mx-1 rounded px-1'>gpt-5.6-terra</code>){' '}{t('Keep these three settings identical to prevent cross-model calls.')}
                       <br />
-                      <span>扣费按实际调用的模型价格结算：不会出现按高级模型价格去扣低级模型额度的情况；调用哪个模型就按哪个模型的额度扣，请放心。</span>
+                      <span>{t('Billing uses the price of the model actually called; each request consumes the matching model quota.')}</span>
                     </div>
                     <div className='text-xs text-muted-foreground space-y-1'>
                       <ConfigField
                         code='base_url'
-                        text='Love Api 的 OpenAI 兼容端点，末尾需要 /v1'
+                        text={t('LoveAPI OpenAI-compatible endpoint; append /v1')}
                       />
                       <ConfigField
                         code='wire_api'
-                        text='固定为 "responses"（Codex / ChatGPT 协议）'
+                        text={t('Set to "responses" for the Codex / ChatGPT protocol')}
                       />
                       <ConfigField
                         code='requires_openai_auth'
-                        text='开启后读取 auth.json 中的 OPENAI_API_KEY 进行鉴权'
+                        text={t('Reads OPENAI_API_KEY from auth.json for authentication')}
                       />
                       <ConfigField
                         code='config.toml'
-                        text='配置文件路径：~/.codex/config.toml'
+                        text={t('Configuration file: ~/.codex/config.toml')}
                       />
                       <ConfigField
                         code='auth.json'
-                        text='密钥文件路径：~/.codex/auth.json'
+                        text={t('Credential file: ~/.codex/auth.json')}
                       />
                     </div>
                     <div className='mt-3'>
@@ -581,11 +582,11 @@ model_provider = "loveapi"`}
                   <Section
                     id='claude'
                     icon='🗣️'
-                    title={SECTION_TITLES.claude}
+                    title={t(SECTION_TITLES.claude)}
                   >
                     <p className='text-muted-foreground text-sm leading-relaxed'>
-                      在 <code className='bg-muted rounded px-1 text-xs'>~/.claude/settings.json</code>{' '}
-                      中通过环境变量指向 Love Api（Claude Code 原生支持自定义端点）：
+                      {t('Point Claude Code to LoveAPI through environment variables in')}{' '}
+                      <code className='bg-muted rounded px-1 text-xs'>~/.claude/settings.json</code>:
                     </p>
                     <CodeBlock
                       code={JSON.stringify(
@@ -605,15 +606,15 @@ model_provider = "loveapi"`}
                     <div className='text-xs text-muted-foreground space-y-1'>
                       <ConfigField
                         code='ANTHROPIC_BASE_URL'
-                        text='Love Api 服务地址（无 /v1 后缀）'
+                        text={t('LoveAPI service address without the /v1 suffix')}
                       />
                       <ConfigField
                         code='ANTHROPIC_AUTH_TOKEN'
-                        text='您的 Love Api 密钥'
+                        text={t('Your LoveAPI key')}
                       />
                       <ConfigField
                         code='ANTHROPIC_MODEL'
-                        text='主模型，可替换为任意 Claude 模型名'
+                        text={t('Primary model; replace with any Claude model name')}
                       />
                     </div>
                   </Section>
@@ -622,10 +623,10 @@ model_provider = "loveapi"`}
                   <Section
                     id='deepseek'
                     icon='🐋'
-                    title={SECTION_TITLES.deepseek}
+                    title={t(SECTION_TITLES.deepseek)}
                   >
                     <p className='text-muted-foreground text-sm leading-relaxed'>
-                      DeepSeek 走 OpenAI 兼容协议，直接用官方 SDK 指向 Love Api 即可：
+                      {t('DeepSeek uses the OpenAI-compatible protocol; point the official SDK at LoveAPI:')}
                     </p>
                     <CodeBlock
                       code={`from openai import OpenAI
@@ -645,7 +646,7 @@ print(resp.choices[0].message.content)`}
                     <div className='text-xs text-muted-foreground space-y-1'>
                       <ConfigField
                         code='base_url'
-                        text='末尾需带 /v1'
+                        text={t('Must end with /v1')}
                       />
                       <ConfigField
                         code='model'
@@ -658,10 +659,10 @@ print(resp.choices[0].message.content)`}
                   <Section
                     id='qwen'
                     icon='💫'
-                    title={SECTION_TITLES.qwen}
+                    title={t(SECTION_TITLES.qwen)}
                   >
                     <p className='text-muted-foreground text-sm leading-relaxed'>
-                      Qwen（通义千问）同样兼容 OpenAI 协议：
+                      {t('Qwen is also compatible with the OpenAI protocol:')}
                     </p>
                     <CodeBlock
                       code={`from openai import OpenAI
@@ -681,7 +682,7 @@ print(resp.choices[0].message.content)`}
                     <div className='text-xs text-muted-foreground space-y-1'>
                       <ConfigField
                         code='model'
-                        text='按需使用 qwen-max / qwen-plus / qwen-turbo'
+                        text={t('Use qwen-max, qwen-plus, or qwen-turbo as needed')}
                       />
                     </div>
                   </Section>
@@ -690,14 +691,14 @@ print(resp.choices[0].message.content)`}
                   <Section
                     id='ccswitch'
                     icon='🔧'
-                    title={SECTION_TITLES.ccswitch}
+                    title={t(SECTION_TITLES.ccswitch)}
                   >
                     <p className='text-muted-foreground text-sm leading-relaxed'>
-                      CC Switch 是一个模型路由切换工具，支持一键导入 provider。用下面深链把 Love Api 添加为 Codex 的提供方
-                      （<code className='bg-muted rounded px-1 text-xs'>app=codex</code> 时端点需带{' '}
-                      <code className='bg-muted rounded px-1 text-xs'>/v1</code>）。深链只负责导入提供方；要「固定只用一个模型」，再照第 ② 步把配置粘贴到{' '}
+                      {t('CC Switch is a model routing tool with one-click provider import. Use the deep link below to add LoveAPI as a Codex provider')}
+                      ({t('for app=codex the endpoint must include')}{' '}
+                      <code className='bg-muted rounded px-1 text-xs'>/v1</code>). {t('The deep link only imports the provider; to pin one model, paste step ② into')}{' '}
                       <code className='bg-muted rounded px-1 text-xs'>~/.codex/config.toml</code>{' '}
-                      并用第 ③ 步启动：
+                      {t('and launch it with step ③:')}
                     </p>
                     <CodeBlock
                       code={`# ① 一键导入 Love Api 为 Codex 提供方（endpoint 需带 /v1）
@@ -721,20 +722,20 @@ model_provider = "loveapi"`}
                       <table className='w-full text-sm'>
                         <thead>
                           <tr className='bg-muted/30 text-left'>
-                            <th className='px-4 py-2 font-medium'>参数</th>
-                            <th className='px-4 py-2 font-medium'>说明</th>
+                            <th className='px-4 py-2 font-medium'>{t('Parameter')}</th>
+                            <th className='px-4 py-2 font-medium'>{t('Description')}</th>
                           </tr>
                         </thead>
                         <tbody className='divide-y'>
                           {[
                             ['app', 'claude / codex / gemini'],
-                            ['name', '提供方在 CC Switch 中的显示名称'],
-                            ['endpoint', 'codex 需带 /v1，其余为服务器地址'],
-                            ['apiKey', '您的 Love Api 密钥'],
-                            ['model', '主模型名，可选'],
+                            ['name', t('Provider display name in CC Switch')],
+                            ['endpoint', t('Codex requires /v1; other apps use the server address')],
+                            ['apiKey', t('Your LoveAPI key')],
+                            ['model', t('Optional primary model name')],
                             [
                               'homepage',
-                              '回填到客户端主页地址，用于二次跳转',
+                              t('Client homepage URL used for a follow-up redirect'),
                             ],
                           ].map(([k, v]) => (
                             <tr key={k}>
@@ -757,12 +758,12 @@ model_provider = "loveapi"`}
                   </Section>
 
                   {/* 8. 支持模型 */}
-                  <Section id='models' icon='🧠' title={SECTION_TITLES.models}>
+                  <Section id='models' icon='🧠' title={t(SECTION_TITLES.models)}>
                     <p className='text-muted-foreground text-sm leading-relaxed'>
-                      Love Api 支持以下模型系列。模型名称遵循上游供应商命名规范，可直接在请求中使用。
+                      {t('LoveAPI supports the following model families. Names follow upstream conventions and can be used directly in requests.')}
                     </p>
                     <h3 className='pt-2 text-base font-semibold'>
-                      🤖 ChatGPT（Codex）系列
+                      🤖 {t('ChatGPT (Codex) family')}
                     </h3>
                     <Card className='p-4'>
                       <div className='flex flex-wrap gap-2'>
@@ -785,7 +786,7 @@ model_provider = "loveapi"`}
                       </div>
                     </Card>
                     <h3 className='pt-2 text-base font-semibold'>
-                      🗣️ Claude 系列
+                      🗣️ {t('Claude family')}
                     </h3>
                     <Card className='p-4'>
                       <div className='flex flex-wrap gap-2'>
@@ -801,7 +802,7 @@ model_provider = "loveapi"`}
                         ))}
                       </div>
                     </Card>
-                    <h3 className='pt-2 text-base font-semibold'>🐋 DeepSeek 系列</h3>
+                    <h3 className='pt-2 text-base font-semibold'>🐋 {t('DeepSeek family')}</h3>
                     <Card className='p-4'>
                       <div className='flex flex-wrap gap-2'>
                         {['deepseek-chat', 'deepseek-reasoner', 'deepseek-v3', 'deepseek-r1'].map(
@@ -814,7 +815,7 @@ model_provider = "loveapi"`}
                       </div>
                     </Card>
                     <h3 className='pt-2 text-base font-semibold'>
-                      💫 Qwen（通义千问）系列
+                      💫 {t('Qwen family')}
                     </h3>
                     <Card className='p-4'>
                       <div className='flex flex-wrap gap-2'>
@@ -833,19 +834,19 @@ model_provider = "loveapi"`}
                   <Section
                     id='endpoints'
                     icon='📡'
-                    title={SECTION_TITLES.endpoints}
+                    title={t(SECTION_TITLES.endpoints)}
                   >
                     <p className='text-muted-foreground text-sm'>
-                      以下所有端点均使用 POST 方法（除非另有说明），请求格式与 OpenAI API 完全兼容。
+                      {t('All endpoints below use POST unless noted otherwise, and follow the OpenAI API request format.')}
                     </p>
                     <EndpointCard
                       method='POST'
                       path='/v1/chat/completions'
-                      desc='聊天补全（核心接口）'
+                      desc={t('Chat completions (core endpoint)')}
                       defaultOpen={true}
                     >
                       <h4 className='text-muted-foreground mb-2 text-xs font-semibold uppercase'>
-                        请求示例
+                        {t('Request example')}
                       </h4>
                       <CodeBlock
                         code={JSON.stringify(
@@ -867,24 +868,24 @@ model_provider = "loveapi"`}
                         )}
                       />
                       <h4 className='text-muted-foreground mt-4 mb-2 text-xs font-semibold uppercase'>
-                        参数说明
+                        {t('Parameter details')}
                       </h4>
                       <div className='text-muted-foreground space-y-1 text-xs'>
-                        <ConfigField code='model' text='必填，模型名称' />
+                        <ConfigField code='model' text={t('Required model name')} />
                         <ConfigField
                           code='messages'
-                          text='必填，消息列表，支持 system/user/assistant'
+                          text={t('Required message list supporting system, user, and assistant')}
                         />
                         <ConfigField
                           code='stream'
-                          text='可选，是否流式输出，默认 false'
+                          text={t('Optional streaming output; defaults to false')}
                         />
                       </div>
                     </EndpointCard>
                     <EndpointCard
                       method='POST'
                       path='/v1/messages'
-                      desc='消息接口（Claude 原生格式）'
+                      desc={t('Messages endpoint (native Claude format)')}
                     >
                       <CodeBlock
                         code={JSON.stringify(
@@ -902,7 +903,7 @@ model_provider = "loveapi"`}
                     <EndpointCard
                       method='GET'
                       path='/v1/models'
-                      desc='获取可用模型列表'
+                      desc={t('List available models')}
                     >
                       <CodeBlock
                         code={JSON.stringify(
@@ -931,7 +932,7 @@ model_provider = "loveapi"`}
                     <EndpointCard
                       method='POST'
                       path='/v1/videos'
-                      desc='视频生成（OpenAI 视频格式）'
+                      desc={t('Video generation (OpenAI format)')}
                     >
                       <CodeBlock
                         code={JSON.stringify(
@@ -946,13 +947,13 @@ model_provider = "loveapi"`}
                         )}
                       />
                       <p className='text-muted-foreground mt-3 text-xs'>
-                        返回任务 ID 后使用 GET /v1/videos/{'{task_id}'} 查询，完成后从 /v1/videos/{'{task_id}'}/content 下载。
+                        {t('After receiving a task ID, use GET /v1/videos/{task_id} to check status and download from /v1/videos/{task_id}/content when complete.')}
                       </p>
                     </EndpointCard>
                     <EndpointCard
                       method='GET'
                       path='/v1/videos/{task_id}'
-                      desc='查询视频生成任务'
+                      desc={t('Retrieve video generation task')}
                     >
                       <CodeBlock
                         code={`curl ${serverAddress}/v1/videos/video_task_id \\\n+  -H "Authorization: Bearer sk-your-loveapi-key"`}
@@ -965,7 +966,7 @@ model_provider = "loveapi"`}
                   <Section
                     id='examples'
                     icon='💻'
-                    title={SECTION_TITLES.examples}
+                    title={t(SECTION_TITLES.examples)}
                   >
                     <h3 className='text-sm font-semibold'>cURL</h3>
                     <CodeBlock
@@ -1001,24 +1002,24 @@ console.log(resp.choices[0].message.content);`}
                   <Section
                     id='errors'
                     icon='⚠️'
-                    title={SECTION_TITLES.errors}
+                    title={t(SECTION_TITLES.errors)}
                   >
                     <div className='overflow-hidden rounded-lg border'>
                       <table className='w-full text-sm'>
                         <thead>
                           <tr className='bg-muted/30 text-left'>
-                            <th className='px-4 py-2 font-medium'>状态码</th>
-                            <th className='px-4 py-2 font-medium'>含义</th>
+                            <th className='px-4 py-2 font-medium'>{t('Status code')}</th>
+                            <th className='px-4 py-2 font-medium'>{t('Meaning')}</th>
                           </tr>
                         </thead>
                         <tbody className='divide-y'>
                           {[
-                            [200, '成功', 'bg-emerald-500/10 text-emerald-600'],
-                            [400, '请求错误', 'bg-amber-500/10 text-amber-600'],
-                            [401, '未授权', 'bg-amber-500/10 text-amber-600'],
-                            [429, '请求过频', 'bg-amber-500/10 text-amber-600'],
-                            [500, '服务器错误', 'bg-red-500/10 text-red-600'],
-                            [503, '服务不可用', 'bg-red-500/10 text-red-600'],
+                            [200, t('Success'), 'bg-emerald-500/10 text-emerald-600'],
+                            [400, t('Bad request'), 'bg-amber-500/10 text-amber-600'],
+                            [401, t('Unauthorized'), 'bg-amber-500/10 text-amber-600'],
+                            [429, t('Too many requests'), 'bg-amber-500/10 text-amber-600'],
+                            [500, t('Server error'), 'bg-red-500/10 text-red-600'],
+                            [503, t('Service unavailable'), 'bg-red-500/10 text-red-600'],
                           ].map(([code, label, cls]) => (
                             <tr key={code}>
                               <td className='px-4 py-2'>
@@ -1044,7 +1045,7 @@ console.log(resp.choices[0].message.content);`}
               <aside data-reveal className='hidden xl:block'>
                 <div className='sticky top-24 space-y-3'>
                   <div className='text-muted-foreground text-xs font-semibold tracking-wider uppercase'>
-                    本页目录
+                    {t('On this page')}
                   </div>
                   <ul className='space-y-1'>
                     {SECTION_IDS.map((id) => (
@@ -1058,7 +1059,7 @@ console.log(resp.choices[0].message.content);`}
                               : 'border-transparent'
                           )}
                         >
-                          {SECTION_TITLES[id]}
+                          {t(SECTION_TITLES[id])}
                         </a>
                       </li>
                     ))}

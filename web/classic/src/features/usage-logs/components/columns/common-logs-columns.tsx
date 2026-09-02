@@ -16,7 +16,6 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { useState } from 'react'
 import { type ColumnDef } from '@tanstack/react-table'
 import { CircleAlert, Sparkles, KeyRound } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
@@ -54,7 +53,6 @@ import {
   isPerCallBilling,
 } from '../../lib/utils'
 import type { LogOtherData } from '../../types'
-import { DetailsDialog } from '../dialogs/details-dialog'
 import { ModelBadge } from '../model-badge'
 import { useUsageLogsContext } from '../usage-logs-provider'
 
@@ -302,6 +300,8 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
           const log = row.original
 
           if (!isDisplayableLogType(log.type)) return null
+          // 后端已对日志脱敏，channel 为 0 时不再展示任何渠道信息。
+          if (log.channel <= 0) return null
 
           const other = parseLogOther(log.other)
           const affinity = other?.admin_info?.channel_affinity
@@ -738,7 +738,6 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
       accessorKey: 'content',
       header: t('Details'),
       cell: function DetailsCell({ row }) {
-        const [dialogOpen, setDialogOpen] = useState(false)
         const log = row.original
         const other = parseLogOther(log.other)
 
@@ -746,47 +745,35 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
         const primary = segments[0]
         const hasMore = segments.length > 1
 
+        // 行内展开由整行点击触发，此处仅展示详情摘要，不再打开弹窗。
         return (
-          <>
-            <button
-              type='button'
-              className='group flex max-w-[200px] items-center gap-1 text-left text-xs'
-              onClick={() => setDialogOpen(true)}
-              title={t('Click to view full details')}
-            >
-              {primary ? (
-                <span
-                  className={cn(
-                    'truncate leading-snug group-hover:underline',
-                    primary.muted
-                      ? 'text-muted-foreground/60'
-                      : primary.danger
-                        ? 'text-red-600 dark:text-red-400'
-                        : 'text-foreground'
-                  )}
-                >
-                  {primary.text}
-                  {hasMore && (
-                    <span className='text-muted-foreground/40 ml-0.5'>
-                      +{segments.length - 1}
-                    </span>
-                  )}
-                </span>
-              ) : log.content ? (
-                <span className='text-muted-foreground truncate group-hover:underline'>
-                  {log.content}
-                </span>
-              ) : (
-                <span className='text-muted-foreground/40'>—</span>
-              )}
-            </button>
-            <DetailsDialog
-              log={log}
-              isAdmin={isAdmin}
-              open={dialogOpen}
-              onOpenChange={setDialogOpen}
-            />
-          </>
+          <span className='group flex max-w-[200px] items-center gap-1 text-xs'>
+            {primary ? (
+              <span
+                className={cn(
+                  'truncate leading-snug',
+                  primary.muted
+                    ? 'text-muted-foreground/60'
+                    : primary.danger
+                      ? 'text-red-600 dark:text-red-400'
+                      : 'text-foreground'
+                )}
+              >
+                {primary.text}
+                {hasMore && (
+                  <span className='text-muted-foreground/40 ml-0.5'>
+                    +{segments.length - 1}
+                  </span>
+                )}
+              </span>
+            ) : log.content ? (
+              <span className='text-muted-foreground truncate'>
+                {log.content}
+              </span>
+            ) : (
+              <span className='text-muted-foreground/40'>—</span>
+            )}
+          </span>
         )
       },
       meta: { label: t('Details') },

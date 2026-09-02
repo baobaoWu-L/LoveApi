@@ -183,9 +183,12 @@ export function Footer(props: FooterProps) {
             &copy; {currentYear} {displayName}.{' '}
             {props.copyright ?? t('footer.defaultCopyright')}
           </p>
-          <span className='text-muted-foreground/25 text-xs'>
-            {t('footer.' + 'love' + 'api' + '.projectAttributionSuffix')}
-          </span>
+          <a
+            href='mailto:LoveBreakerApi@outlook.com'
+            className='text-muted-foreground/45 hover:text-foreground text-xs transition-colors'
+          >
+            {t('Contact administrator')}: LoveBreakerApi@outlook.com
+          </a>
         </div>
       </div>
     </footer>

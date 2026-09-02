@@ -119,7 +119,7 @@ function ShowcaseSlide({
                 key={tag}
                 className='border-border/30 text-muted-foreground rounded-sm border px-2.5 py-1 text-[10px] font-medium tracking-wide uppercase'
               >
-                {tag}
+                {t(tag)}
               </span>
             ))}
           </div>
