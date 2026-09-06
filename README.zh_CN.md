@@ -1,10 +1,10 @@
 <div align="center">
 
-![new-api](/web/default/public/logo.png)
+![Love-api](/web/default/public/logo.png)
 
-# New API
+# Love API
 
-🍥 **新一代大模型网关与AI资产管理系统**
+ 🍥 **Love API 大模型网关与AI资产管理系统**
 
 <p align="center">
   简体中文 |

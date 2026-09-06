@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/model"
@@ -169,9 +170,9 @@ func seedToken(t *testing.T, db *gorm.DB, userID int, name string, rawKey string
 		Name:           name,
 		Key:            rawKey,
 		Status:         common.TokenStatusEnabled,
-		CreatedTime:    1,
-		AccessedTime:   1,
-		ExpiredTime:    -1,
+		CreatedTime:    time.Now(),
+		AccessedTime:   time.Now(),
+		ExpiredTime:    nil,
 		RemainQuota:    100,
 		UnlimitedQuota: true,
 		Group:          "default",
@@ -332,9 +333,9 @@ func runTokenMigrationCompatibilityTest(t *testing.T, db *gorm.DB, dialect strin
 		Name:               "long-token",
 		Key:                longKey,
 		Status:             common.TokenStatusEnabled,
-		CreatedTime:        1,
-		AccessedTime:       1,
-		ExpiredTime:        -1,
+		CreatedTime:        time.Now(),
+		AccessedTime:       time.Now(),
+		ExpiredTime:        nil,
 		RemainQuota:        200,
 		UnlimitedQuota:     true,
 		ModelLimitsEnabled: false,

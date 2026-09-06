@@ -12,20 +12,22 @@ import (
 )
 
 type ImageRequest struct {
-	Model             string          `json:"model"`
-	Prompt            string          `json:"prompt" binding:"required"`
-	N                 *uint           `json:"n,omitempty"`
-	Size              string          `json:"size,omitempty"`
-	Quality           string          `json:"quality,omitempty"`
-	ResponseFormat    string          `json:"response_format,omitempty"`
-	Style             json.RawMessage `json:"style,omitempty"`
-	User              json.RawMessage `json:"user,omitempty"`
-	ExtraFields       json.RawMessage `json:"extra_fields,omitempty"`
-	Background        json.RawMessage `json:"background,omitempty"`
-	Moderation        json.RawMessage `json:"moderation,omitempty"`
-	OutputFormat      json.RawMessage `json:"output_format,omitempty"`
-	OutputCompression json.RawMessage `json:"output_compression,omitempty"`
-	PartialImages     json.RawMessage `json:"partial_images,omitempty"`
+	Model               string          `json:"model"`
+	Prompt              string          `json:"prompt" binding:"required"`
+	N                   *uint           `json:"n,omitempty"`
+	Size                string          `json:"size,omitempty"`
+	AspectRatio         string          `json:"aspect_ratio,omitempty"`
+	ResolutionTierValue string          `json:"resolution_tier,omitempty"`
+	Quality             string          `json:"quality,omitempty"`
+	ResponseFormat      string          `json:"response_format,omitempty"`
+	Style               json.RawMessage `json:"style,omitempty"`
+	User                json.RawMessage `json:"user,omitempty"`
+	ExtraFields         json.RawMessage `json:"extra_fields,omitempty"`
+	Background          json.RawMessage `json:"background,omitempty"`
+	Moderation          json.RawMessage `json:"moderation,omitempty"`
+	OutputFormat        json.RawMessage `json:"output_format,omitempty"`
+	OutputCompression   json.RawMessage `json:"output_compression,omitempty"`
+	PartialImages       json.RawMessage `json:"partial_images,omitempty"`
 	// Stream            bool            `json:"stream,omitempty"`
 	Images        json.RawMessage `json:"images,omitempty"`
 	Mask          json.RawMessage `json:"mask,omitempty"`
@@ -37,6 +39,62 @@ type ImageRequest struct {
 	Image            json.RawMessage `json:"image,omitempty"`
 	// 用匿名参数接收额外参数
 	Extra map[string]json.RawMessage `json:"-"`
+}
+
+// GPTImage2PricesUSD contains the per-image USD prices used by the local
+// gateway. These are intentionally fixed per request and do not use model or
+// group multipliers.
+var GPTImage2PricesUSD = map[string]float64{
+	"1k": 0.07,
+	"2k": 0.07,
+	"4k": 0.30,
+}
+
+var fixedImagePricesUSD = map[string]float64{
+	"gemini-3-pro-image":     0.50,
+	"gemini-3.1-flash-image": 0.50,
+}
+
+func (i *ImageRequest) ResolutionTier() string {
+	if i == nil {
+		return "2k"
+	}
+	if i.ResolutionTierValue != "" {
+		tier := strings.ToLower(strings.TrimSpace(i.ResolutionTierValue))
+		if tier == "1k" || tier == "2k" || tier == "4k" {
+			return tier
+		}
+	}
+	if raw, ok := i.Extra["resolution_tier"]; ok {
+		var tier string
+		if err := common.Unmarshal(raw, &tier); err == nil {
+			tier = strings.ToLower(strings.TrimSpace(tier))
+			if tier == "1k" || tier == "2k" || tier == "4k" {
+				return tier
+			}
+		}
+	}
+	return "2k"
+}
+
+func ImagePriceUSD(modelName, tier string) (float64, bool) {
+	modelName = strings.ToLower(strings.TrimSpace(modelName))
+	if price, ok := fixedImagePricesUSD[modelName]; ok {
+		return price, true
+	}
+	if modelName != "gpt-image-2" {
+		return 0, false
+	}
+	price, ok := GPTImage2PricesUSD[strings.ToLower(strings.TrimSpace(tier))]
+	if !ok {
+		price = GPTImage2PricesUSD["2k"]
+	}
+	return price, true
+}
+
+func IsFixedImageModel(modelName string) bool {
+	_, ok := fixedImagePricesUSD[strings.ToLower(strings.TrimSpace(modelName))]
+	return ok
 }
 
 func (i *ImageRequest) UnmarshalJSON(data []byte) error {
@@ -82,13 +140,13 @@ func (r ImageRequest) MarshalJSON() ([]byte, error) {
 		return nil, err
 	}
 
-	// 不能合并ExtraFields！！！！！！！！
-	// 合并 ExtraFields
-	//for k, v := range r.Extra {
-	//	if _, exists := baseMap[k]; !exists {
-	//		baseMap[k] = v
-	//	}
-	//}
+	// Preserve provider-specific fields captured by the permissive decoder while
+	// never allowing them to overwrite an explicit standard field.
+	for k, v := range r.Extra {
+		if _, exists := baseMap[k]; !exists {
+			baseMap[k] = v
+		}
+	}
 
 	return common.Marshal(baseMap)
 }
@@ -147,6 +205,17 @@ func (i *ImageRequest) GetTokenCountMeta() *types.TokenCountMeta {
 			qualityRatio = 2.0
 			if i.Size == "1024x1792" || i.Size == "1792x1024" {
 				qualityRatio = 1.5
+			}
+		}
+	}
+
+	// Fixed-price image models use a per-image price. Include the requested count in
+	// the pre-consume estimate; settlement uses the same fixed unit price.
+	if unitPrice, ok := ImagePriceUSD(i.Model, i.ResolutionTier()); ok {
+		if strings.EqualFold(strings.TrimSpace(i.Model), "gpt-image-2") {
+			sizeRatio = unitPrice / GPTImage2PricesUSD["2k"]
+			if i.N != nil && *i.N > 1 {
+				sizeRatio *= float64(*i.N)
 			}
 		}
 	}

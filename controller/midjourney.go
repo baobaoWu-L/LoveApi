@@ -121,9 +121,9 @@ func UpdateMidjourneyTaskBulk() {
 			for _, responseItem := range responseItems {
 				task := taskM[responseItem.MjId]
 
-				useTime := (time.Now().UnixNano() / int64(time.Millisecond)) - task.SubmitTime
+				useTime := time.Since(task.SubmitTime)
 				// 如果时间超过一小时，且进度不是100%，则认为任务失败
-				if useTime > 3600000 && task.Progress != "100%" {
+				if useTime > time.Hour && task.Progress != "100%" {
 					responseItem.FailReason = "上游任务超时（超过1小时）"
 					responseItem.Status = "FAILURE"
 				}
@@ -135,9 +135,9 @@ func UpdateMidjourneyTaskBulk() {
 				task.Progress = responseItem.Progress
 				task.PromptEn = responseItem.PromptEn
 				task.State = responseItem.State
-				task.SubmitTime = responseItem.SubmitTime
-				task.StartTime = responseItem.StartTime
-				task.FinishTime = responseItem.FinishTime
+				task.SubmitTime = model.MsToTime(responseItem.SubmitTime)
+				task.StartTime = model.MsToTime(responseItem.StartTime)
+				task.FinishTime = model.MsToTime(responseItem.FinishTime)
 				task.ImageUrl = responseItem.ImageUrl
 				task.Status = responseItem.Status
 				task.FailReason = responseItem.FailReason
@@ -212,13 +212,13 @@ func checkMjTaskNeedUpdate(oldTask *model.Midjourney, newTask dto.MidjourneyDto)
 	if oldTask.State != newTask.State {
 		return true
 	}
-	if oldTask.SubmitTime != newTask.SubmitTime {
+	if oldTask.SubmitTimeMs() != newTask.SubmitTime {
 		return true
 	}
-	if oldTask.StartTime != newTask.StartTime {
+	if oldTask.StartTimeMs() != newTask.StartTime {
 		return true
 	}
-	if oldTask.FinishTime != newTask.FinishTime {
+	if oldTask.FinishTimeMs() != newTask.FinishTime {
 		return true
 	}
 	if oldTask.ImageUrl != newTask.ImageUrl {
@@ -230,7 +230,7 @@ func checkMjTaskNeedUpdate(oldTask *model.Midjourney, newTask dto.MidjourneyDto)
 	if oldTask.FailReason != newTask.FailReason {
 		return true
 	}
-	if oldTask.FinishTime != newTask.FinishTime {
+	if oldTask.FinishTimeMs() != newTask.FinishTime {
 		return true
 	}
 	if oldTask.Progress != "100%" && newTask.FailReason != "" {

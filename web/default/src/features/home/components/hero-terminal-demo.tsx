@@ -19,8 +19,6 @@ For commercial licensing, please contact support@quantumnous.com
 import { useState, useEffect, useRef, type ReactNode } from 'react'
 import { cn } from '@/lib/utils'
 
-type AccentTone = 'emerald' | 'amber' | 'blue' | 'violet'
-
 interface ApiDemoConfig {
   id: string
   label: string
@@ -32,41 +30,6 @@ interface ApiDemoConfig {
   responseHighlights: string[]
   tokens: number
   latency: number
-  accent: AccentTone
-}
-
-const ACCENT_CLASSES: Record<
-  AccentTone,
-  {
-    activeText: string
-    activeBorder: string
-    badge: string
-  }
-> = {
-  emerald: {
-    activeText: 'text-emerald-600 dark:text-emerald-400',
-    activeBorder: 'border-emerald-500 dark:border-emerald-400',
-    badge:
-      'bg-emerald-500/10 text-emerald-600 dark:bg-emerald-400/10 dark:text-emerald-400',
-  },
-  amber: {
-    activeText: 'text-amber-600 dark:text-amber-400',
-    activeBorder: 'border-amber-500 dark:border-amber-400',
-    badge:
-      'bg-amber-500/10 text-amber-600 dark:bg-amber-400/10 dark:text-amber-400',
-  },
-  blue: {
-    activeText: 'text-blue-600 dark:text-blue-400',
-    activeBorder: 'border-blue-500 dark:border-blue-400',
-    badge:
-      'bg-blue-500/10 text-blue-600 dark:bg-blue-400/10 dark:text-blue-400',
-  },
-  violet: {
-    activeText: 'text-violet-600 dark:text-violet-400',
-    activeBorder: 'border-violet-500 dark:border-violet-400',
-    badge:
-      'bg-violet-500/10 text-violet-600 dark:bg-violet-400/10 dark:text-violet-400',
-  },
 }
 
 const API_DEMOS: ApiDemoConfig[] = [
@@ -91,7 +54,6 @@ const API_DEMOS: ApiDemoConfig[] = [
     responseHighlights: ['<text>', '<tokens>'],
     tokens: 27,
     latency: 142,
-    accent: 'emerald',
   },
   {
     id: 'responses',
@@ -109,7 +71,6 @@ const API_DEMOS: ApiDemoConfig[] = [
     responseHighlights: ['<text>', '<tokens>'],
     tokens: 31,
     latency: 168,
-    accent: 'amber',
   },
   {
     id: 'claude',
@@ -117,23 +78,9 @@ const API_DEMOS: ApiDemoConfig[] = [
     method: 'POST',
     endpoint: '/v1/messages',
     headers: ['"x-api-key: sk-••••"', '"anthropic-version: 2023-06-01"'],
-    request: [
-      '"model": "your-model",',
-      '"max_tokens": 1024,',
-      '"messages": [',
-      '  { "role": "user", "content": "..." }',
-      ']',
-    ],
-    response: [
-      '{',
-      '  "content": [{ "type": "text", "text": <text> }],',
-      '  "usage": { "input_tokens": <in>, "output_tokens": <out> }',
-      '}',
-    ],
-    responseHighlights: ['<text>', '<in>', '<out>'],
-    tokens: 29,
-    latency: 156,
-    accent: 'blue',
+    request: ['"model": "your-model",', '"max_tokens": 1024,', '"messages": [', '  { "role": "user", "content": "..." }', ']'],
+    response: ['{', '  "content": [{ "type": "text", "text": <text> }],', '  "usage": { "input_tokens": <in>, "output_tokens": <out> }', '}'],
+    responseHighlights: ['<text>', '<in>', '<out>'], tokens: 29, latency: 156,
   },
   {
     id: 'gemini',
@@ -141,29 +88,17 @@ const API_DEMOS: ApiDemoConfig[] = [
     method: 'POST',
     endpoint: '/v1beta/models/{model}:generateContent',
     headers: ['"x-goog-api-key: sk-••••"'],
-    request: [
-      '"contents": [',
-      '  { "role": "user",',
-      '    "parts": [{ "text": "..." }] }',
-      ']',
-    ],
-    response: [
-      '{',
-      '  "candidates": [{ "content": { "parts": [{ "text": <text> }] } }],',
-      '  "usageMetadata": { "totalTokenCount": <tokens> }',
-      '}',
-    ],
-    responseHighlights: ['<text>', '<tokens>'],
-    tokens: 25,
-    latency: 93,
-    accent: 'violet',
+    request: ['"contents": [', '  { "role": "user",', '    "parts": [{ "text": "..." }] }', ']'],
+    response: ['{', '  "candidates": [{ "content": { "parts": [{ "text": <text> }] } }],', '  "usageMetadata": { "totalTokenCount": <tokens> }', '}'],
+    responseHighlights: ['<text>', '<tokens>'], tokens: 25, latency: 93,
   },
 ]
 
 const CYCLE_INTERVAL = 4500
 const TRANSITION_MS = 220
 
-export function HeroTerminalDemo() {
+export function HeroTerminalDemo({ variant = 'all' }: { variant?: 'all' | 'openai' | 'providers' }) {
+  const demos = variant === 'openai' ? API_DEMOS.slice(0, 2) : variant === 'providers' ? API_DEMOS.slice(2) : API_DEMOS
   const [activeIndex, setActiveIndex] = useState(0)
   const [transitioning, setTransitioning] = useState(false)
   const intervalRef = useRef<ReturnType<typeof setInterval>>(undefined)
@@ -176,7 +111,7 @@ export function HeroTerminalDemo() {
     intervalRef.current = setInterval(() => {
       setTransitioning(true)
       timeoutRef.current = setTimeout(() => {
-        setActiveIndex((prev) => (prev + 1) % API_DEMOS.length)
+        setActiveIndex((prev) => (prev + 1) % demos.length)
         setTransitioning(false)
       }, TRANSITION_MS)
     }, CYCLE_INTERVAL)
@@ -185,7 +120,7 @@ export function HeroTerminalDemo() {
       if (intervalRef.current) clearInterval(intervalRef.current)
       if (timeoutRef.current) clearTimeout(timeoutRef.current)
     }
-  }, [])
+  }, [demos.length])
 
   const handleSelect = (index: number) => {
     if (index === activeIndex) return
@@ -198,11 +133,10 @@ export function HeroTerminalDemo() {
     }, TRANSITION_MS)
   }
 
-  const demo = API_DEMOS[activeIndex]
-  const accent = ACCENT_CLASSES[demo.accent]
+  const demo = demos[activeIndex]
 
   return (
-    <div className='mx-auto mt-16 w-full max-w-2xl'>
+    <div className='mx-auto w-full max-w-2xl'>
       <div
         className={cn(
           'overflow-hidden rounded-2xl border backdrop-blur-sm',
@@ -217,8 +151,7 @@ export function HeroTerminalDemo() {
             'border-border/50 dark:border-white/[0.05]'
           )}
         >
-          {API_DEMOS.map((item, index) => {
-            const tone = ACCENT_CLASSES[item.accent]
+          {demos.map((item, index) => {
             const isActive = index === activeIndex
             return (
               <button
@@ -227,7 +160,7 @@ export function HeroTerminalDemo() {
                 className={cn(
                   'relative -mb-px flex items-center gap-1.5 border-b-2 px-2.5 py-2.5 text-[11px] font-medium tracking-wide transition-colors sm:px-3 sm:text-xs',
                   isActive
-                    ? `${tone.activeBorder} ${tone.activeText}`
+                    ? 'border-foreground text-foreground'
                     : 'text-foreground/40 hover:text-foreground/70 border-transparent'
                 )}
               >
@@ -236,7 +169,7 @@ export function HeroTerminalDemo() {
             )
           })}
           <div className='ml-auto flex items-center gap-2 pr-2 sm:pr-3'>
-            <span className='inline-block size-1.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.45)]' />
+            <span className='inline-block size-1.5 rounded-full bg-foreground/30' />
             <span className='text-foreground/40 font-mono text-[10px] tracking-wider uppercase'>
               200 ok
             </span>
@@ -250,12 +183,7 @@ export function HeroTerminalDemo() {
             'border-border/40 dark:border-white/[0.04]'
           )}
         >
-          <span
-            className={cn(
-              'rounded-md px-1.5 py-0.5 font-mono text-[10px] font-semibold tracking-wider',
-              accent.badge
-            )}
-          >
+          <span className='rounded-md border border-foreground/20 bg-foreground/5 px-1.5 py-0.5 font-mono text-[10px] font-semibold tracking-wider text-foreground/70'>
             {demo.method}
           </span>
           <code
@@ -410,23 +338,23 @@ function renderResponseLine(line: string, demo: ApiDemoConfig): ReactNode {
     const placeholder = match[0]
     if (placeholder === '<text>') {
       segments.push(
-        <Accent key={`ph-${idx}`} accent={demo.accent}>
+        <Highlight key={`ph-${idx}`}>
           {`"${truncateResponse(demo)}"`}
-        </Accent>
+        </Highlight>
       )
     } else if (placeholder === '<tokens>') {
-      segments.push(<NumberText key={`ph-${idx}`}>{demo.tokens}</NumberText>)
+      segments.push(<Highlight key={`ph-${idx}`}>{demo.tokens}</Highlight>)
     } else if (placeholder === '<in>') {
       segments.push(
-        <NumberText key={`ph-${idx}`}>
+        <Highlight key={`ph-${idx}`}>
           {Math.floor(demo.tokens * 0.4)}
-        </NumberText>
+        </Highlight>
       )
     } else if (placeholder === '<out>') {
       segments.push(
-        <NumberText key={`ph-${idx}`}>
+        <Highlight key={`ph-${idx}`}>
           {Math.ceil(demo.tokens * 0.6)}
-        </NumberText>
+        </Highlight>
       )
     } else {
       segments.push(<Muted key={`ph-${idx}`}>{placeholder}</Muted>)
@@ -452,7 +380,6 @@ function truncateResponse(demo: ApiDemoConfig): string {
 }
 
 function tokenize(input: string): ReactNode {
-  // Split string into "..." string runs and the rest, then color keys/punct.
   const segments: ReactNode[] = []
   let cursor = 0
   const matches = [...input.matchAll(STRING_RE)]
@@ -498,46 +425,25 @@ function CodeLine(props: { children: ReactNode; indent?: number }) {
 }
 
 function Command(props: { children: ReactNode }) {
-  return (
-    <span className='font-medium text-emerald-600 dark:text-emerald-400'>
-      {props.children}
-    </span>
-  )
+  return <span className='font-medium text-foreground/80'>{props.children}</span>
 }
 
 function Flag(props: { children: ReactNode }) {
-  return (
-    <span className='text-blue-600 dark:text-blue-400'>{props.children}</span>
-  )
+  return <span className='text-foreground/60'>{props.children}</span>
 }
 
 function Key(props: { children: ReactNode }) {
-  return (
-    <span className='text-sky-700 dark:text-sky-300'>{props.children}</span>
-  )
+  return <span className='text-foreground/90'>{props.children}</span>
 }
 
 function StringText(props: { children: ReactNode }) {
-  return (
-    <span className='text-amber-700 dark:text-amber-300'>{props.children}</span>
-  )
+  return <span className='text-foreground/70'>{props.children}</span>
 }
 
-function NumberText(props: { children: ReactNode }) {
-  return (
-    <span className='font-medium text-violet-600 dark:text-violet-300'>
-      {props.children}
-    </span>
-  )
+function Highlight(props: { children: ReactNode }) {
+  return <span className='font-medium text-foreground'>{props.children}</span>
 }
 
 function Muted(props: { children: ReactNode }) {
-  return <span className='text-foreground/55'>{props.children}</span>
-}
-
-function Accent(props: { children: ReactNode; accent: AccentTone }) {
-  const tone = ACCENT_CLASSES[props.accent]
-  return (
-    <span className={cn('font-medium', tone.activeText)}>{props.children}</span>
-  )
+  return <span className='text-foreground/45'>{props.children}</span>
 }

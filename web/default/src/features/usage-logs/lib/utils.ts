@@ -87,7 +87,11 @@ export function getDefaultTimeRange(): { start: Date; end: Date } {
 /**
  * Convert milliseconds timestamp to seconds for API
  */
-function timestampToSeconds(ms: number): number {
+function timestampToSeconds(ms: number | string): number {
+  if (typeof ms === 'string') {
+    const t = Date.parse(ms)
+    return Number.isNaN(t) ? 0 : Math.floor(t / 1000)
+  }
   return Math.floor(ms / 1000)
 }
 

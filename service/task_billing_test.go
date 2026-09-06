@@ -96,8 +96,8 @@ func seedSubscription(t *testing.T, id int, userId int, amountTotal int64, amoun
 		AmountTotal: amountTotal,
 		AmountUsed:  amountUsed,
 		Status:      "active",
-		StartTime:   time.Now().Unix(),
-		EndTime:     time.Now().Add(30 * 24 * time.Hour).Unix(),
+		StartTime:   time.Now(),
+		EndTime:     time.Now().Add(30 * 24 * time.Hour),
 	}
 	require.NoError(t, model.DB.Create(sub).Error)
 }
@@ -117,8 +117,8 @@ func makeTask(userId, channelId, quota, tokenId int, billingSource string, subsc
 		Status:    model.TaskStatus(model.TaskStatusInProgress),
 		Group:     "default",
 		Data:      json.RawMessage(`{}`),
-		CreatedAt: time.Now().Unix(),
-		UpdatedAt: time.Now().Unix(),
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
 		Properties: model.Properties{
 			OriginModelName: "test-model",
 		},
@@ -448,11 +448,11 @@ func simulatePollBilling(ctx context.Context, task *model.Task, newStatus model.
 	switch string(newStatus) {
 	case model.TaskStatusSuccess:
 		task.Progress = "100%"
-		task.FinishTime = 9999
+		task.FinishTime = time.Unix(9999, 0)
 		shouldSettle = true
 	case model.TaskStatusFailure:
 		task.Progress = "100%"
-		task.FinishTime = 9999
+		task.FinishTime = time.Unix(9999, 0)
 		task.FailReason = "upstream error"
 		if quota != 0 {
 			shouldRefund = true

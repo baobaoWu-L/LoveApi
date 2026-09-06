@@ -28,9 +28,9 @@ import {
   Zap,
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import { useStatus } from '@/hooks/use-status'
 import type { BundledLanguage } from 'shiki/bundle/web'
 import { cn } from '@/lib/utils'
-import { useStatus } from '@/hooks/use-status'
 import { Badge } from '@/components/ui/badge'
 import {
   Table,
@@ -260,25 +260,30 @@ function buildGeminiSample(lang: Lang, ctx: SampleContext): string {
   }
   if (lang === 'python') {
     return [
-      'import google.generativeai as genai',
+      'import requests',
       '',
-      `genai.configure(api_key="<YOUR_API_KEY>")`,
+      `url = "${url.replace(`$${ctx.apiKeyEnv}`, '<YOUR_API_KEY>')}"`,
       '',
-      `model = genai.GenerativeModel("${ctx.modelName}")`,
-      `response = model.generate_content("${userMessage}")`,
+      'response = requests.post(',
+      '    url,',
+      `    json={"contents": [{"parts": [{"text": "${userMessage}"}]}]},`,
+      '    timeout=120,',
+      ')',
       '',
-      `print(response.text)`,
+      'print(response.json())',
     ].join('\n')
   }
   if (lang === 'typescript') {
     return [
-      `import { GoogleGenerativeAI } from '@google/generative-ai'`,
+      `const url = \`${url.replace(`$${ctx.apiKeyEnv}`, '${process.env.' + ctx.apiKeyEnv + '}')}\``,
       '',
-      `const genAI = new GoogleGenerativeAI(process.env.${ctx.apiKeyEnv}!)`,
-      `const model = genAI.getGenerativeModel({ model: '${ctx.modelName}' })`,
+      `const response = await fetch(url, {`,
+      `  method: 'POST',`,
+      `  headers: { 'Content-Type': 'application/json' },`,
+      `  body: JSON.stringify({ contents: [{ parts: [{ text: '${userMessage}' }] }] }),`,
+      `})`,
       '',
-      `const result = await model.generateContent('${userMessage}')`,
-      `console.log(result.response.text())`,
+      `console.log(await response.json())`,
     ].join('\n')
   }
   return [
@@ -387,7 +392,7 @@ function buildImageSample(lang: Lang, ctx: SampleContext): string {
       `    n=1,`,
       ')',
       '',
-      'print(response.data[0].url)',
+      'print(response.data[0].url or response.data[0].b64_json)',
     ].join('\n')
   }
   if (lang === 'typescript') {
@@ -406,7 +411,7 @@ function buildImageSample(lang: Lang, ctx: SampleContext): string {
       `  n: 1,`,
       `})`,
       '',
-      `console.log(response.data[0].url)`,
+      `console.log(response.data[0].url ?? response.data[0].b64_json)`,
     ].join('\n')
   }
   return [
@@ -425,8 +430,17 @@ function buildImageSample(lang: Lang, ctx: SampleContext): string {
     `})`,
     '',
     `const data = await response.json()`,
-    `console.log(data.data[0].url)`,
+    `console.log(data.data[0].url ?? data.data[0].b64_json)`,
   ].join('\n')
+}
+
+function buildVideoSample(lang: Lang, ctx: SampleContext): string {
+  const url = `${ctx.baseUrl}${ctx.endpointPath}`
+  const body = JSON.stringify({ model: ctx.modelName, prompt: 'A cinematic sunset over the ocean', seconds: '5', size: '1280x720' }, null, 2)
+  if (lang === 'curl') return `curl ${url} -H "Authorization: Bearer $${ctx.apiKeyEnv}" -H "Content-Type: application/json" -d '${body}'`
+  if (lang === 'python') return ['from openai import OpenAI', '', `client = OpenAI(base_url="${ctx.baseUrl}/v1", api_key="<YOUR_API_KEY>")`, '', 'video = client.videos.create(', `    model="${ctx.modelName}",`, '    prompt="A cinematic sunset over the ocean",', '    seconds="5",', '    size="1280x720",', ')', '', 'print(video.id)'].join('\n')
+  if (lang === 'typescript') return [`import OpenAI from 'openai'`, '', `const client = new OpenAI({ baseURL: '${ctx.baseUrl}/v1', apiKey: process.env.${ctx.apiKeyEnv} })`, '', `const video = await client.videos.create({ model: '${ctx.modelName}', prompt: 'A cinematic sunset over the ocean', seconds: '5', size: '1280x720' })`, 'console.log(video.id)'].join('\n')
+  return [`const response = await fetch('${url}', {`, "  method: 'POST',", '  headers: {', `    Authorization: \`Bearer \${process.env.${ctx.apiKeyEnv}}\`,` , "    'Content-Type': 'application/json',", '  },', `  body: JSON.stringify(${body}),`, '})', '', 'console.log(await response.json())'].join('\n')
 }
 
 function buildSample(
@@ -439,7 +453,19 @@ function buildSample(
   if (endpointType === 'embeddings' || endpointType === 'jina-rerank')
     return buildEmbeddingSample(lang, ctx)
   if (endpointType === 'image-generation') return buildImageSample(lang, ctx)
+  if (endpointType === 'openai-video') return buildVideoSample(lang, ctx)
   return buildChatSample(lang, ctx)
+}
+
+const FALLBACK_PATHS: Record<string, string> = {
+  openai: '/v1/chat/completions',
+  'openai-response': '/v1/responses',
+  anthropic: '/v1/messages',
+  gemini: '/v1beta/models/{model}:generateContent',
+  'image-generation': '/v1/images/generations',
+  embeddings: '/v1/embeddings',
+  'jina-rerank': '/v1/rerank',
+  'openai-video': '/v1/videos',
 }
 
 // ---------------------------------------------------------------------------
@@ -452,26 +478,18 @@ function CodeSamplesSection(props: {
 }) {
   const { t } = useTranslation()
   const { status } = useStatus()
-
-  const baseUrl = useMemo(() => {
-    const candidate =
-      (status as Record<string, unknown> | null)?.server_address ??
-      (status as Record<string, unknown> | null)?.serverAddress ??
-      (status?.data as Record<string, unknown> | undefined)?.server_address ??
-      (status?.data as Record<string, unknown> | undefined)?.serverAddress
-    if (candidate && typeof candidate === 'string') {
-      return candidate.replace(/\/$/, '')
-    }
-    if (typeof window !== 'undefined') return window.location.origin
-    return 'https://api.example.com'
-  }, [status])
+  // 管理端可能运行在 localhost，示例必须使用实际对外 API 网关地址。
+  const baseUrl =
+    (status?.server_address as string) ||
+    (typeof window !== 'undefined' ? window.location.origin : '')
 
   const endpoints = useMemo(() => {
-    const types = props.model.supported_endpoint_types || []
+    const declaredTypes = props.model.supported_endpoint_types || []
+    const types = declaredTypes
     return types
       .map((type) => {
         const info = props.endpointMap[type] || {}
-        let path = info.path || ''
+        let path = info.path || FALLBACK_PATHS[type] || ''
         if (path && path.includes('{model}')) {
           path = replaceModelInPath(path, props.model.model_name || '')
         }
@@ -495,7 +513,7 @@ function CodeSamplesSection(props: {
 
   const code = buildSample(lang, activeEndpoint.type, {
     baseUrl,
-    apiKeyEnv: 'NEW_API_KEY',
+    apiKeyEnv: 'LoveApi_Key',
     modelName: props.model.model_name || '',
     endpointType: activeEndpoint.type,
     endpointPath: activeEndpoint.path,

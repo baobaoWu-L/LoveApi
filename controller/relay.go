@@ -89,7 +89,13 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 	defer func() {
 		if newAPIError != nil {
 			logger.LogError(c, fmt.Sprintf("relay error: %s", newAPIError.Error()))
-			newAPIError.SetMessage(common.MessageWithRequestId(newAPIError.Error(), requestId))
+			// 对上游服务端/网关错误（5xx）做脱敏：不把上游原始信息（如 Cloudflare 的
+			// "origin web server returned..."）返回给用户，只返回平台通用错误提示。
+			errMsg := newAPIError.Error()
+			if newAPIError.StatusCode >= 500 {
+				errMsg = "服务繁忙，请稍后重试"
+			}
+			newAPIError.SetMessage(common.MessageWithRequestId(errMsg, requestId))
 			switch relayFormat {
 			case types.RelayFormatOpenAIRealtime:
 				helper.WssError(c, ws, newAPIError.ToOpenAIError())
@@ -116,6 +122,10 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 		}
 		return
 	}
+	// Keep the original request body available for every channel retry. Image
+	// edits may contain large reference files, so cleanup must happen only after
+	// the complete relay (including retries) has finished.
+	defer common.CleanupBodyStorage(c)
 
 	relayInfo, err := relaycommon.GenRelayInfo(c, relayFormat, request, ws)
 	if err != nil {
@@ -222,6 +232,9 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 
 		if newAPIError == nil {
 			relayInfo.LastError = nil
+			if relayInfo.RelayMode == relayconstant.RelayModeImagesGenerations || relayInfo.RelayMode == relayconstant.RelayModeImagesEdits {
+				relay.PublishCanvasEvent(relayInfo.UserId, relay.CanvasEvent{Type: "canvas_generation_completed", RequestID: requestId, Model: relayInfo.OriginModelName})
+			}
 			return
 		}
 
@@ -241,6 +254,9 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 		logger.LogInfo(c, retryLogStr)
 	}
 	if newAPIError != nil {
+		if relayInfo.RelayMode == relayconstant.RelayModeImagesGenerations || relayInfo.RelayMode == relayconstant.RelayModeImagesEdits {
+			relay.PublishCanvasEvent(relayInfo.UserId, relay.CanvasEvent{Type: "canvas_generation_failed", RequestID: requestId, Model: relayInfo.OriginModelName, Message: newAPIError.Error()})
+		}
 		gopool.Go(func() {
 			perfmetrics.RecordRelaySample(relayInfo, false, 0)
 		})

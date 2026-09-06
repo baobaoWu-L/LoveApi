@@ -12,6 +12,7 @@ import (
 	"github.com/QuantumNous/new-api/logger"
 	"github.com/QuantumNous/new-api/relay/channel/openrouter"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
+	relayconstant "github.com/QuantumNous/new-api/relay/constant"
 	"github.com/QuantumNous/new-api/relay/helper"
 	"github.com/QuantumNous/new-api/service"
 
@@ -569,6 +570,31 @@ func OpenaiHandlerWithUsage(c *gin.Context, info *relaycommon.RelayInfo, resp *h
 	err = common.Unmarshal(responseBody, &usageResp)
 	if err != nil {
 		return nil, types.NewOpenAIError(err, types.ErrorCodeBadResponseBody, http.StatusInternalServerError)
+	}
+
+	// 图片生成成功后，把上游返回的生成结果链接写入 context，
+	// 供日志记录（PostTextConsumeQuota → other.image_billing.generated_image_url）。
+	// 注意：命名避开 sanitizeUsageOther 会过滤的 image_url/result 等 key。
+	if info.RelayMode == relayconstant.RelayModeImagesGenerations || info.RelayMode == relayconstant.RelayModeImagesEdits {
+		// Debug 模式打印上游图片响应体（前段），便于定位图片字段名与右侧不显示问题。
+		if common.DebugEnabled {
+			bodyPreview := string(responseBody)
+			if len(bodyPreview) > 1500 {
+				bodyPreview = bodyPreview[:1500]
+			}
+			logger.LogDebug(c, fmt.Sprintf("image upstream response: %s", bodyPreview))
+		}
+		var imgResp struct {
+			Data []struct {
+				Url     string `json:"url"`
+				B64Json string `json:"b64_json"`
+			} `json:"data"`
+		}
+		if err := common.Unmarshal(responseBody, &imgResp); err == nil {
+			if len(imgResp.Data) > 0 && imgResp.Data[0].Url != "" {
+				c.Set("image_generated_url", imgResp.Data[0].Url)
+			}
+		}
 	}
 
 	// 写入新的 response body

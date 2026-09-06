@@ -1,0 +1,75 @@
+# Love API - MySQL Compose（backend + frontend + redis + mysql 一体化，项目 loveapiplatform）
+# 使用方式:
+#   docker compose -f docker-compose.mysql.yml up -d
+#   访问 http://服务器IP:3001 （前端由 nginx 承载，/api 反代到 backend）
+
+services:
+  backend:
+    image: love-api:latest
+    container_name: love-api-backend
+    restart: always
+    command: --log-dir /app/logs
+    volumes:
+      - ./data:/data
+      - ./logs:/app/logs
+    environment:
+      - SQL_DSN=root:love-api-lovebreaker-2004@tcp(mysql:3306)/love_api?charset=utf8mb4&parseTime=True&loc=Local
+      - REDIS_CONN_STRING=redis://:love-api-lovebreaker-2004@redis:6379
+      - TZ=Asia/Shanghai
+      - SESSION_SECRET=740e859f2badc3dca4dbbc4121815f0d81cab2334695b5f3766afb1718c705e9
+      - ERROR_LOG_ENABLED=true
+      - BATCH_UPDATE_ENABLED=true
+      - MAX_REQUEST_BODY_MB=1024
+      # Upstream account dashboard (USD balance/spend). Supply these values
+      # through the host environment or a .env file; never commit the token.
+      - SUPERAI_ACCOUNT_API_TOKEN=${SUPERAI_ACCOUNT_API_TOKEN:-}
+      - SUPERAI_ACCOUNT_USER_ID=${SUPERAI_ACCOUNT_USER_ID:-}
+      - SUPERAI_ACCOUNT_API_URL=${SUPERAI_ACCOUNT_API_URL:-https://superaiapi.com/api/user/self}
+    depends_on:
+      - redis
+      - mysql
+    networks:
+      - love-api-network
+
+  frontend:
+    image: love-api-frontend
+    container_name: love-api-frontend
+    restart: always
+    ports:
+      - "3001:80"
+    depends_on:
+      - backend
+    volumes:
+      # 挂载 nginx 配置，改 nginx.conf 后 restart 即生效，无需重建镜像
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    networks:
+      - love-api-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: love-api-redis
+    restart: always
+    command: ["redis-server", "--requirepass", "love-api-lovebreaker-2004"]
+    networks:
+      - love-api-network
+
+  mysql:
+    image: mysql:8.0
+    container_name: love-api-mysql
+    restart: always
+    ports:
+      - "3307:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: love-api-lovebreaker-2004
+      MYSQL_DATABASE: love_api
+    volumes:
+      - mysql_data:/var/lib/mysql
+    networks:
+      - love-api-network
+
+volumes:
+  mysql_data:
+
+networks:
+  love-api-network:
+    external: true

@@ -193,7 +193,7 @@ func loadOptionsFromDatabase() {
 	for _, option := range options {
 		err := updateOptionMap(option.Key, option.Value)
 		if err != nil {
-			common.SysLog("failed to update option map: " + err.Error())
+			common.SysLog("failed to update option map (key=" + option.Key + "): " + err.Error())
 		}
 	}
 }
@@ -207,19 +207,51 @@ func SyncOptions(frequency int) {
 }
 
 func UpdateOption(key string, value string) error {
-	// Save to database first
+	// Validate and apply in memory before persisting. Invalid JSON or corrupted
+	// charset values must never be written to the database.
+	common.OptionMapRWMutex.RLock()
+	previousValue, hadPreviousValue := common.OptionMap[key]
+	common.OptionMapRWMutex.RUnlock()
+	if err := updateOptionMap(key, value); err != nil {
+		common.OptionMapRWMutex.Lock()
+		if hadPreviousValue {
+			common.OptionMap[key] = previousValue
+		} else {
+			delete(common.OptionMap, key)
+		}
+		common.OptionMapRWMutex.Unlock()
+		return err
+	}
+
 	option := Option{
 		Key: key,
 	}
 	// https://gorm.io/docs/update.html#Save-All-Fields
-	DB.FirstOrCreate(&option, Option{Key: key})
+	if err := DB.FirstOrCreate(&option, Option{Key: key}).Error; err != nil {
+		if hadPreviousValue {
+			_ = updateOptionMap(key, previousValue)
+		} else {
+			common.OptionMapRWMutex.Lock()
+			delete(common.OptionMap, key)
+			common.OptionMapRWMutex.Unlock()
+		}
+		return err
+	}
 	option.Value = value
 	// Save is a combination function.
 	// If save value does not contain primary key, it will execute Create,
 	// otherwise it will execute Update (with all fields).
-	DB.Save(&option)
-	// Update OptionMap
-	return updateOptionMap(key, value)
+	if err := DB.Save(&option).Error; err != nil {
+		if hadPreviousValue {
+			_ = updateOptionMap(key, previousValue)
+		} else {
+			common.OptionMapRWMutex.Lock()
+			delete(common.OptionMap, key)
+			common.OptionMapRWMutex.Unlock()
+		}
+		return err
+	}
+	return nil
 }
 
 func updateOptionMap(key string, value string) (err error) {

@@ -42,20 +42,19 @@ func sweepTimedOutTasks(ctx context.Context) {
 	if constant.TaskTimeoutMinutes <= 0 {
 		return
 	}
-	cutoff := time.Now().Unix() - int64(constant.TaskTimeoutMinutes)*60
+	cutoff := time.Now().Add(-time.Duration(constant.TaskTimeoutMinutes) * time.Minute)
 	tasks := model.GetTimedOutUnfinishedTasks(cutoff, 100)
 	if len(tasks) == 0 {
 		return
 	}
 
-	const legacyTaskCutoff int64 = 1740182400 // 2026-02-22 00:00:00 UTC
 	reason := fmt.Sprintf("任务超时（%d分钟）", constant.TaskTimeoutMinutes)
 	legacyReason := "任务超时（旧系统遗留任务，不进行退款，请联系管理员）"
-	now := time.Now().Unix()
+	now := time.Now()
 	timedOutCount := 0
 
 	for _, task := range tasks {
-		isLegacy := task.SubmitTime > 0 && task.SubmitTime < legacyTaskCutoff
+		isLegacy := !task.SubmitTime.IsZero() && task.SubmitTime.Before(time.Date(2026, 2, 22, 0, 0, 0, 0, time.UTC))
 
 		oldStatus := task.Status
 		task.Status = model.TaskStatusFailure
@@ -228,9 +227,15 @@ func updateSunoTasks(ctx context.Context, channelId int, taskIds []string, taskM
 
 		task.Status = lo.If(model.TaskStatus(responseItem.Status) != "", model.TaskStatus(responseItem.Status)).Else(task.Status)
 		task.FailReason = lo.If(responseItem.FailReason != "", responseItem.FailReason).Else(task.FailReason)
-		task.SubmitTime = lo.If(responseItem.SubmitTime != 0, responseItem.SubmitTime).Else(task.SubmitTime)
-		task.StartTime = lo.If(responseItem.StartTime != 0, responseItem.StartTime).Else(task.StartTime)
-		task.FinishTime = lo.If(responseItem.FinishTime != 0, responseItem.FinishTime).Else(task.FinishTime)
+		if ts := unixToTime(responseItem.SubmitTime); ts != nil {
+			task.SubmitTime = *ts
+		}
+		if ts := unixToTime(responseItem.StartTime); ts != nil {
+			task.StartTime = *ts
+		}
+		if ts := unixToTime(responseItem.FinishTime); ts != nil {
+			task.FinishTime = *ts
+		}
 		if responseItem.FailReason != "" || task.Status == model.TaskStatusFailure {
 			logger.LogInfo(ctx, task.TaskID+" 构建失败，"+task.FailReason)
 			task.Progress = "100%"
@@ -250,14 +255,23 @@ func updateSunoTasks(ctx context.Context, channelId int, taskIds []string, taskM
 }
 
 // taskNeedsUpdate 检查 Suno 任务是否需要更新
+// unixToTime 将非零 unix 秒转换为指针，0 或负值返回 nil。
+func unixToTime(sec int64) *time.Time {
+	if sec <= 0 {
+		return nil
+	}
+	t := time.Unix(sec, 0)
+	return &t
+}
+
 func taskNeedsUpdate(oldTask *model.Task, newTask dto.SunoDataResponse) bool {
-	if oldTask.SubmitTime != newTask.SubmitTime {
+	if us := unixToTime(newTask.SubmitTime); us == nil || !oldTask.SubmitTime.Equal(*us) {
 		return true
 	}
-	if oldTask.StartTime != newTask.StartTime {
+	if us := unixToTime(newTask.StartTime); us == nil || !oldTask.StartTime.Equal(*us) {
 		return true
 	}
-	if oldTask.FinishTime != newTask.FinishTime {
+	if us := unixToTime(newTask.FinishTime); us == nil || !oldTask.FinishTime.Equal(*us) {
 		return true
 	}
 	if string(oldTask.Status) != newTask.Status {
@@ -396,7 +410,7 @@ func updateVideoSingleTask(ctx context.Context, adaptor TaskPollingAdaptor, ch *
 
 	logger.LogDebug(ctx, fmt.Sprintf("updateVideoSingleTask taskResult: %+v", taskResult))
 
-	now := time.Now().Unix()
+	now := time.Now()
 	if taskResult.Status == "" {
 		//taskResult = relaycommon.FailTaskInfo("upstream returned empty status")
 		errorResult := &dto.GeneralErrorResponse{}
@@ -431,12 +445,12 @@ func updateVideoSingleTask(ctx context.Context, adaptor TaskPollingAdaptor, ch *
 		task.Progress = taskcommon.ProgressQueued
 	case model.TaskStatusInProgress:
 		task.Progress = taskcommon.ProgressInProgress
-		if task.StartTime == 0 {
+		if task.StartTime.IsZero() {
 			task.StartTime = now
 		}
 	case model.TaskStatusSuccess:
 		task.Progress = taskcommon.ProgressComplete
-		if task.FinishTime == 0 {
+		if task.FinishTime.IsZero() {
 			task.FinishTime = now
 		}
 		if strings.HasPrefix(taskResult.Url, "data:") {
@@ -454,7 +468,7 @@ func updateVideoSingleTask(ctx context.Context, adaptor TaskPollingAdaptor, ch *
 		logger.LogJson(ctx, fmt.Sprintf("Task %s failed", taskId), task)
 		task.Status = model.TaskStatusFailure
 		task.Progress = taskcommon.ProgressComplete
-		if task.FinishTime == 0 {
+		if task.FinishTime.IsZero() {
 			task.FinishTime = now
 		}
 		task.FailReason = taskResult.Reason
@@ -506,6 +520,7 @@ func redactVideoResponseBody(body []byte) []byte {
 	if err := common.Unmarshal(body, &m); err != nil {
 		return body
 	}
+	redactTaskContent(m)
 	resp, _ := m["response"].(map[string]any)
 	if resp != nil {
 		delete(resp, "bytesBase64Encoded")
@@ -525,6 +540,30 @@ func redactVideoResponseBody(body []byte) []byte {
 		return body
 	}
 	return b
+}
+
+func redactTaskContent(value map[string]any) {
+	blocked := map[string]struct{}{
+		"prompt": {}, "prompt_en": {}, "messages": {}, "message": {},
+		"input": {}, "output": {}, "content": {}, "text": {},
+		"bytesBase64Encoded": {},
+	}
+	for key, item := range value {
+		if _, ok := blocked[key]; ok {
+			delete(value, key)
+			continue
+		}
+		switch nested := item.(type) {
+		case map[string]any:
+			redactTaskContent(nested)
+		case []any:
+			for _, entry := range nested {
+				if child, ok := entry.(map[string]any); ok {
+					redactTaskContent(child)
+				}
+			}
+		}
+	}
 }
 
 func truncateBase64(s string) string {

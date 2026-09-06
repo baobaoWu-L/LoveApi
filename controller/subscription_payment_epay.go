@@ -91,7 +91,7 @@ func SubscriptionRequestEpay(c *gin.Context) {
 		TradeNo:         tradeNo,
 		PaymentMethod:   req.PaymentMethod,
 		PaymentProvider: model.PaymentProviderEpay,
-		CreateTime:      time.Now().Unix(),
+		CreateTime:      time.Now(),
 		Status:          common.TopUpStatusPending,
 	}
 	if err := order.Insert(); err != nil {

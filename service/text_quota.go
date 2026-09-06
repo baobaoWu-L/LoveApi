@@ -373,6 +373,16 @@ func PostTextConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, us
 	if err := SettleBilling(ctx, relayInfo, summary.Quota); err != nil {
 		logger.LogError(ctx, "error settling billing: "+err.Error())
 	}
+	if detail, ok := ctx.Get("image_billing_detail"); ok {
+		if imageDetail, ok := detail.(map[string]interface{}); ok {
+			imageDetail["actual_quota"] = summary.Quota
+			if common.QuotaPerUnit > 0 {
+				imageDetail["actual_price_usd"] = float64(summary.Quota) / common.QuotaPerUnit
+				extraContent = append(extraContent, fmt.Sprintf("实际扣费 $%.6f（%d quota）", float64(summary.Quota)/common.QuotaPerUnit, summary.Quota))
+			}
+			imageDetail["settled"] = summary.TotalTokens > 0
+		}
+	}
 
 	logModel := summary.ModelName
 	if strings.HasPrefix(logModel, "gpt-4-gizmo") {
@@ -428,6 +438,18 @@ func PostTextConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, us
 	if summary.ImageGenerationCallPrice > 0 {
 		other["image_generation_call"] = true
 		other["image_generation_call_price"] = summary.ImageGenerationCallPrice
+	}
+	if detail, ok := ctx.Get("image_billing_detail"); ok && detail != nil {
+		other["image_billing"] = detail
+		// 图片生成成功后，上游返回的生成结果链接（可能为一次性签名/防盗链地址）
+		// 由 relay 层写入 ctx，这里并入 image_billing 以便日志展示「生成结果链接」。
+		if url, ok := ctx.Get("image_generated_url"); ok {
+			if urlStr, ok := url.(string); ok && urlStr != "" {
+				if billingMap, ok := detail.(map[string]interface{}); ok {
+					billingMap["generated_image_url"] = urlStr
+				}
+			}
+		}
 	}
 	if summary.CacheCreationTokens > 0 {
 		other["cache_creation_tokens"] = summary.CacheCreationTokens

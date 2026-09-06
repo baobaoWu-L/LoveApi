@@ -1,8 +1,8 @@
 package ratio_setting
 
 import (
-	"encoding/json"
 	"errors"
+	"strings"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/setting/config"
@@ -65,12 +65,33 @@ func GetGroupRatioSetting() *GroupRatioSetting {
 }
 
 func GetGroupRatioCopy() map[string]float64 {
-	return groupRatioMap.ReadAll()
+	groups := groupRatioMap.ReadAll()
+	// `default` is the canonical public name. Keep compatibility with
+	// installations that stored the key as `Default`.
+	for name, ratio := range groups {
+		if strings.EqualFold(name, "default") && name != "default" {
+			if _, exists := groups["default"]; !exists {
+				groups["default"] = ratio
+			}
+			delete(groups, name)
+		}
+	}
+	return groups
 }
 
 func ContainsGroupRatio(name string) bool {
-	_, ok := groupRatioMap.Get(name)
-	return ok
+	if strings.EqualFold(name, "default") {
+		name = "default"
+	}
+	if _, ok := groupRatioMap.Get(name); ok {
+		return true
+	}
+	for configured := range groupRatioMap.ReadAll() {
+		if strings.EqualFold(configured, name) {
+			return true
+		}
+	}
+	return false
 }
 
 func GroupRatio2JSONString() string {
@@ -78,11 +99,40 @@ func GroupRatio2JSONString() string {
 }
 
 func UpdateGroupRatioByJSONString(jsonStr string) error {
-	return types.LoadFromJsonString(groupRatioMap, jsonStr)
+	// 保护：拒绝字符集损坏（中文被替换为 ?/�）的 GroupRatio，避免分组名在运行时无法匹配。
+	if strings.Contains(jsonStr, "?") || strings.ContainsRune(jsonStr, '�') {
+		return errors.New("GroupRatio 含非法占位字符（疑似字符集损坏），拒绝写入")
+	}
+	var values map[string]float64
+	if err := common.Unmarshal([]byte(jsonStr), &values); err != nil {
+		return err
+	}
+	normalized := make(map[string]float64, len(values))
+	for name, ratio := range values {
+		if strings.EqualFold(name, "default") {
+			name = "default"
+		}
+		normalized[name] = ratio
+	}
+	data, err := common.Marshal(normalized)
+	if err != nil {
+		return err
+	}
+	return types.LoadFromJsonString(groupRatioMap, string(data))
 }
 
 func GetGroupRatio(name string) float64 {
+	if strings.EqualFold(name, "default") {
+		name = "default"
+	}
 	ratio, ok := groupRatioMap.Get(name)
+	if !ok {
+		for configured, value := range groupRatioMap.ReadAll() {
+			if strings.EqualFold(configured, name) {
+				return value
+			}
+		}
+	}
 	if !ok {
 		common.SysLog("group ratio not found: " + name)
 		return 1
@@ -112,7 +162,7 @@ func UpdateGroupGroupRatioByJSONString(jsonStr string) error {
 
 func CheckGroupRatio(jsonStr string) error {
 	checkGroupRatio := make(map[string]float64)
-	err := json.Unmarshal([]byte(jsonStr), &checkGroupRatio)
+	err := common.Unmarshal([]byte(jsonStr), &checkGroupRatio)
 	if err != nil {
 		return err
 	}

@@ -2,6 +2,7 @@ package model
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/QuantumNous/new-api/common"
 	"gorm.io/gorm"
@@ -49,18 +50,22 @@ func GetRankingQuotaBuckets(startTime int64, endTime int64, bucketSize int64) ([
 }
 
 func rankingBucketExpr(bucketSize int64) string {
-	if common.UsingMySQL {
-		return fmt.Sprintf("FLOOR(created_at / %d) * %d", bucketSize, bucketSize)
+	switch {
+	case common.UsingPostgreSQL:
+		return fmt.Sprintf("FLOOR(EXTRACT(EPOCH FROM created_at)::int / %d) * %d", bucketSize, bucketSize)
+	case common.UsingSQLite:
+		return fmt.Sprintf("FLOOR(CAST(strftime('%%s', created_at) AS INT) / %d) * %d", bucketSize, bucketSize)
+	default:
+		return fmt.Sprintf("FLOOR(UNIX_TIMESTAMP(created_at) / %d) * %d", bucketSize, bucketSize)
 	}
-	return fmt.Sprintf("(created_at / %d) * %d", bucketSize, bucketSize)
 }
 
 func applyRankingQuotaTimeRange(query *gorm.DB, startTime int64, endTime int64) *gorm.DB {
 	if startTime > 0 {
-		query = query.Where("created_at >= ?", startTime)
+		query = query.Where("created_at >= ?", time.Unix(startTime, 0))
 	}
 	if endTime > 0 {
-		query = query.Where("created_at <= ?", endTime)
+		query = query.Where("created_at <= ?", time.Unix(endTime, 0))
 	}
 	return query
 }

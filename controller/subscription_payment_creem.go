@@ -93,7 +93,7 @@ func SubscriptionRequestCreemPay(c *gin.Context) {
 		TradeNo:         referenceId,
 		PaymentMethod:   model.PaymentMethodCreem,
 		PaymentProvider: model.PaymentProviderCreem,
-		CreateTime:      time.Now().Unix(),
+		CreateTime:      time.Now(),
 		Status:          common.TopUpStatusPending,
 	}
 	if err := order.Insert(); err != nil {

@@ -144,6 +144,18 @@ func UpdateModelMeta(c *gin.Context) {
 	common.ApiSuccess(c, &m)
 }
 
+// SyncPricingToModelMeta 从定价配置同步模型到模型元信息表
+func SyncPricingToModelMeta(c *gin.Context) {
+	added, err := model.SyncPricingToModelMeta()
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, gin.H{
+		"added": added,
+	})
+}
+
 // DeleteModelMeta 删除模型
 func DeleteModelMeta(c *gin.Context) {
 	idStr := c.Param("id")

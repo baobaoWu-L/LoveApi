@@ -17,7 +17,6 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 /* eslint-disable react-refresh/only-export-components */
-import { useState } from 'react'
 import type { ColumnDef } from '@tanstack/react-table'
 import { Zap } from 'lucide-react'
 import { formatTimestampToDate, formatTokens } from '@/lib/format'
@@ -31,7 +30,6 @@ import {
 import { DataTableColumnHeader } from '@/components/data-table'
 import { StatusBadge } from '@/components/status-badge'
 import { formatDuration } from '../../lib/format'
-import { FailReasonDialog } from '../dialogs/fail-reason-dialog'
 
 /**
  * Cache tooltip component for token display
@@ -227,7 +225,7 @@ export function createChannelColumn<T>(config: {
 export function createFailReasonColumn<T>(config: {
   accessorKey?: string
   headerLabel: string
-  cellTitle: string
+      cellTitle: string
 }): ColumnDef<T> {
   const { accessorKey = 'fail_reason', headerLabel, cellTitle } = config
 
@@ -238,30 +236,18 @@ export function createFailReasonColumn<T>(config: {
     ),
     cell: function FailReasonCell({ row }) {
       const failReason = row.getValue(accessorKey) as string
-      const [dialogOpen, setDialogOpen] = useState(false)
 
       if (!failReason) {
         return <span className='text-muted-foreground/60 text-xs'>-</span>
       }
 
       return (
-        <>
-          <button
-            type='button'
-            className='group flex max-w-[200px] items-center gap-1 text-left text-xs'
-            onClick={() => setDialogOpen(true)}
-            title={cellTitle}
-          >
-            <span className='truncate leading-snug text-red-600 group-hover:underline dark:text-red-400'>
-              {failReason}
-            </span>
-          </button>
-          <FailReasonDialog
-            failReason={failReason}
-            open={dialogOpen}
-            onOpenChange={setDialogOpen}
-          />
-        </>
+        <span
+          className='block max-w-[200px] truncate text-xs leading-snug text-red-600 dark:text-red-400'
+          title={cellTitle}
+        >
+          {failReason}
+        </span>
       )
     },
     meta: { label: headerLabel },

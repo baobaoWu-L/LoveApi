@@ -67,8 +67,8 @@ func truncateTables(t *testing.T) {
 
 func insertTask(t *testing.T, task *Task) {
 	t.Helper()
-	task.CreatedAt = time.Now().Unix()
-	task.UpdatedAt = time.Now().Unix()
+	task.CreatedAt = time.Now()
+	task.UpdatedAt = time.Now()
 	require.NoError(t, DB.Create(task).Error)
 }
 
@@ -80,8 +80,8 @@ func TestSnapshotEqual_Same(t *testing.T) {
 	s := taskSnapshot{
 		Status:     TaskStatusInProgress,
 		Progress:   "50%",
-		StartTime:  1000,
-		FinishTime: 0,
+		StartTime:  time.Unix(1000, 0),
+		FinishTime: time.Time{},
 		FailReason: "",
 		ResultURL:  "",
 		Data:       json.RawMessage(`{"key":"value"}`),
@@ -118,8 +118,8 @@ func TestSnapshot_Roundtrip(t *testing.T) {
 	task := &Task{
 		Status:     TaskStatusInProgress,
 		Progress:   "42%",
-		StartTime:  1234,
-		FinishTime: 5678,
+		StartTime:  time.Unix(1234, 0),
+		FinishTime: time.Unix(5678, 0),
 		FailReason: "timeout",
 		PrivateData: TaskPrivateData{
 			ResultURL: "https://example.com/result.mp4",
@@ -212,7 +212,7 @@ func TestUpdateWithStatus_ConcurrentWinner(t *testing.T) {
 				Data:     json.RawMessage(`{}`),
 			}
 			t.CreatedAt = task.CreatedAt
-			t.UpdatedAt = time.Now().Unix()
+			t.UpdatedAt = time.Now()
 			won, err := t.UpdateWithStatus(TaskStatusInProgress)
 			if err == nil {
 				wins[idx] = won

@@ -1,10 +1,13 @@
 package controller
 
 import (
+	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/i18n"
@@ -13,6 +16,51 @@ import (
 
 	"github.com/gin-gonic/gin"
 )
+
+// tokenRequest 服务于 Add/UpdateToken 的请求绑定。
+// ExpiredTime 使用 json.RawMessage 以兼容前端可能提交的 unix 秒数字、-1(永不过期)
+// 与 RFC3339 字符串；负数/空 表示不过期（映射为 nil）。
+type tokenRequest struct {
+	Id                 int             `json:"id"`
+	Name               string          `json:"name"`
+	Status             int             `json:"status"`
+	ExpiredTime        json.RawMessage `json:"expired_time"`
+	RemainQuota        int             `json:"remain_quota"`
+	UnlimitedQuota     bool            `json:"unlimited_quota"`
+	ModelLimitsEnabled bool            `json:"model_limits_enabled"`
+	ModelLimits        string          `json:"model_limits"`
+	AllowIps           *string         `json:"allow_ips"`
+	Group              string          `json:"group"`
+	CrossGroupRetry    bool            `json:"cross_group_retry"`
+}
+
+// parseTokenExpiredTime 解析请求中的 expired_time 为 *time.Time。
+// nil 表示永不过期。兼容 unix 秒数字、-1、空、RFC3339 字符串。
+func parseTokenExpiredTime(raw json.RawMessage) (*time.Time, error) {
+	if len(raw) == 0 || string(raw) == "null" {
+		return nil, nil
+	}
+	var sec int64
+	if err := common.Unmarshal(raw, &sec); err == nil {
+		if sec <= 0 {
+			return nil, nil
+		}
+		t := time.Unix(sec, 0)
+		return &t, nil
+	}
+	var s string
+	if err := common.Unmarshal(raw, &s); err == nil {
+		if s == "" {
+			return nil, nil
+		}
+		t, err := time.Parse(time.RFC3339, s)
+		if err != nil {
+			return nil, errors.New("无效的过期时间")
+		}
+		return &t, nil
+	}
+	return nil, errors.New("无效的过期时间")
+}
 
 func buildMaskedTokenResponse(token *model.Token) *model.Token {
 	if token == nil {
@@ -102,16 +150,16 @@ func GetTokenStatus(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
-	expiredAt := token.ExpiredTime
-	if expiredAt == -1 {
-		expiredAt = 0
+	var expiresAt int64
+	if token.ExpiredTime != nil {
+		expiresAt = token.ExpiredTime.UnixMilli()
 	}
 	c.JSON(http.StatusOK, gin.H{
 		"object":          "credit_summary",
 		"total_granted":   token.RemainQuota,
 		"total_used":      0, // not supported currently
 		"total_available": token.RemainQuota,
-		"expires_at":      expiredAt * 1000,
+		"expires_at":      expiresAt,
 	})
 }
 
@@ -142,9 +190,9 @@ func GetTokenUsage(c *gin.Context) {
 		return
 	}
 
-	expiredAt := token.ExpiredTime
-	if expiredAt == -1 {
-		expiredAt = 0
+	var expiresAt int64
+	if token.ExpiredTime != nil {
+		expiresAt = token.ExpiredTime.Unix()
 	}
 
 	c.JSON(http.StatusOK, gin.H{
@@ -159,33 +207,38 @@ func GetTokenUsage(c *gin.Context) {
 			"unlimited_quota":      token.UnlimitedQuota,
 			"model_limits":         token.GetModelLimitsMap(),
 			"model_limits_enabled": token.ModelLimitsEnabled,
-			"expires_at":           expiredAt,
+			"expires_at":           expiresAt,
 		},
 	})
 }
 
 func AddToken(c *gin.Context) {
-	token := model.Token{}
-	err := c.ShouldBindJSON(&token)
+	req := tokenRequest{}
+	err := c.ShouldBindJSON(&req)
 	if err != nil {
 		common.ApiError(c, err)
 		return
 	}
-	if len(token.Name) > 50 {
+	if len(req.Name) > 50 {
 		common.ApiErrorI18n(c, i18n.MsgTokenNameTooLong)
 		return
 	}
 	// 非无限额度时，检查额度值是否超出有效范围
-	if !token.UnlimitedQuota {
-		if token.RemainQuota < 0 {
+	if !req.UnlimitedQuota {
+		if req.RemainQuota < 0 {
 			common.ApiErrorI18n(c, i18n.MsgTokenQuotaNegative)
 			return
 		}
 		maxQuotaValue := int((1000000000 * common.QuotaPerUnit))
-		if token.RemainQuota > maxQuotaValue {
+		if req.RemainQuota > maxQuotaValue {
 			common.ApiErrorI18n(c, i18n.MsgTokenQuotaExceedMax, map[string]any{"Max": maxQuotaValue})
 			return
 		}
+	}
+	expiredAt, err := parseTokenExpiredTime(req.ExpiredTime)
+	if err != nil {
+		common.ApiError(c, err)
+		return
 	}
 	// 检查用户令牌数量是否已达上限
 	maxTokens := operation_setting.GetMaxUserTokens()
@@ -209,18 +262,18 @@ func AddToken(c *gin.Context) {
 	}
 	cleanToken := model.Token{
 		UserId:             c.GetInt("id"),
-		Name:               token.Name,
+		Name:               req.Name,
 		Key:                key,
-		CreatedTime:        common.GetTimestamp(),
-		AccessedTime:       common.GetTimestamp(),
-		ExpiredTime:        token.ExpiredTime,
-		RemainQuota:        token.RemainQuota,
-		UnlimitedQuota:     token.UnlimitedQuota,
-		ModelLimitsEnabled: token.ModelLimitsEnabled,
-		ModelLimits:        token.ModelLimits,
-		AllowIps:           token.AllowIps,
-		Group:              token.Group,
-		CrossGroupRetry:    token.CrossGroupRetry,
+		CreatedTime:        time.Now(),
+		AccessedTime:       time.Now(),
+		ExpiredTime:        expiredAt,
+		RemainQuota:        req.RemainQuota,
+		UnlimitedQuota:     req.UnlimitedQuota,
+		ModelLimitsEnabled: req.ModelLimitsEnabled,
+		ModelLimits:        req.ModelLimits,
+		AllowIps:           req.AllowIps,
+		Group:              req.Group,
+		CrossGroupRetry:    req.CrossGroupRetry,
 	}
 	err = cleanToken.Insert()
 	if err != nil {
@@ -250,34 +303,39 @@ func DeleteToken(c *gin.Context) {
 func UpdateToken(c *gin.Context) {
 	userId := c.GetInt("id")
 	statusOnly := c.Query("status_only")
-	token := model.Token{}
-	err := c.ShouldBindJSON(&token)
+	req := tokenRequest{}
+	err := c.ShouldBindJSON(&req)
 	if err != nil {
 		common.ApiError(c, err)
 		return
 	}
-	if len(token.Name) > 50 {
+	if len(req.Name) > 50 {
 		common.ApiErrorI18n(c, i18n.MsgTokenNameTooLong)
 		return
 	}
-	if !token.UnlimitedQuota {
-		if token.RemainQuota < 0 {
+	if !req.UnlimitedQuota {
+		if req.RemainQuota < 0 {
 			common.ApiErrorI18n(c, i18n.MsgTokenQuotaNegative)
 			return
 		}
 		maxQuotaValue := int((1000000000 * common.QuotaPerUnit))
-		if token.RemainQuota > maxQuotaValue {
+		if req.RemainQuota > maxQuotaValue {
 			common.ApiErrorI18n(c, i18n.MsgTokenQuotaExceedMax, map[string]any{"Max": maxQuotaValue})
 			return
 		}
 	}
-	cleanToken, err := model.GetTokenByIds(token.Id, userId)
+	expiredAt, err := parseTokenExpiredTime(req.ExpiredTime)
 	if err != nil {
 		common.ApiError(c, err)
 		return
 	}
-	if token.Status == common.TokenStatusEnabled {
-		if cleanToken.Status == common.TokenStatusExpired && cleanToken.ExpiredTime <= common.GetTimestamp() && cleanToken.ExpiredTime != -1 {
+	cleanToken, err := model.GetTokenByIds(req.Id, userId)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	if req.Status == common.TokenStatusEnabled {
+		if cleanToken.Status == common.TokenStatusExpired && cleanToken.ExpiredTime != nil && cleanToken.ExpiredTime.Before(time.Now()) {
 			common.ApiErrorI18n(c, i18n.MsgTokenExpiredCannotEnable)
 			return
 		}
@@ -287,18 +345,18 @@ func UpdateToken(c *gin.Context) {
 		}
 	}
 	if statusOnly != "" {
-		cleanToken.Status = token.Status
+		cleanToken.Status = req.Status
 	} else {
 		// If you add more fields, please also update token.Update()
-		cleanToken.Name = token.Name
-		cleanToken.ExpiredTime = token.ExpiredTime
-		cleanToken.RemainQuota = token.RemainQuota
-		cleanToken.UnlimitedQuota = token.UnlimitedQuota
-		cleanToken.ModelLimitsEnabled = token.ModelLimitsEnabled
-		cleanToken.ModelLimits = token.ModelLimits
-		cleanToken.AllowIps = token.AllowIps
-		cleanToken.Group = token.Group
-		cleanToken.CrossGroupRetry = token.CrossGroupRetry
+		cleanToken.Name = req.Name
+		cleanToken.ExpiredTime = expiredAt
+		cleanToken.RemainQuota = req.RemainQuota
+		cleanToken.UnlimitedQuota = req.UnlimitedQuota
+		cleanToken.ModelLimitsEnabled = req.ModelLimitsEnabled
+		cleanToken.ModelLimits = req.ModelLimits
+		cleanToken.AllowIps = req.AllowIps
+		cleanToken.Group = req.Group
+		cleanToken.CrossGroupRetry = req.CrossGroupRetry
 	}
 	err = cleanToken.Update()
 	if err != nil {

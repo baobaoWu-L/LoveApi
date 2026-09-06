@@ -20,8 +20,15 @@ func ContainsAutoGroup(group string) bool {
 }
 
 func UpdateAutoGroupsByJsonString(jsonString string) error {
-	autoGroups = make([]string, 0)
-	return common.Unmarshal([]byte(jsonString), &autoGroups)
+	var updated []string
+	if err := common.Unmarshal([]byte(jsonString), &updated); err != nil {
+		return err
+	}
+	if updated == nil {
+		updated = []string{}
+	}
+	autoGroups = updated
+	return nil
 }
 
 func AutoGroups2JsonString() string {
@@ -33,5 +40,5 @@ func AutoGroups2JsonString() string {
 }
 
 func GetAutoGroups() []string {
-	return autoGroups
+	return append([]string(nil), autoGroups...)
 }

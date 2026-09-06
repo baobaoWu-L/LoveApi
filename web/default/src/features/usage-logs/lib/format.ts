@@ -106,6 +106,28 @@ export function parseLogOther(other: string): LogOtherData | null {
 }
 
 /**
+ * 提取图片生成日志的计费明细与生成结果链接。
+ * 后端把明细写入 other.image_billing，并把生成结果链接塞进
+ * image_billing.generated_image_url（兼容顶层 image_generated_url）。
+ */
+export function getImageBilling(other: LogOtherData | null) {
+  const billing = other?.image_billing
+  return {
+    resolvedUrl: billing?.generated_image_url || other?.image_generated_url || '',
+    size: billing?.size || '',
+    quality: billing?.quality || '',
+    tier: billing?.resolution_tier || '',
+    multiplier: billing?.group_multiplier,
+    count: billing?.requested_images,
+    unitPrice: billing?.unit_price_usd,
+    actualQuota: billing?.actual_quota,
+    actualPriceUsd: billing?.actual_price_usd,
+    estimatedQuota: billing?.estimated_quota,
+    hasBilling: Boolean(billing),
+  }
+}
+
+/**
  * Get time color based on duration (in seconds)
  */
 export function getTimeColor(
@@ -284,17 +306,28 @@ export function getTieredBillingSummary(
  * @param finishTime - Finish timestamp
  * @param unit - Unit of the timestamps ('seconds' or 'milliseconds')
  */
+function toDurationMs(
+  value?: number | string,
+  unit: 'seconds' | 'milliseconds' = 'milliseconds'
+): number | null {
+  if (value == null || value === '' || value === -1 || value === 0) return null
+  if (typeof value === 'string') {
+    const ms = Date.parse(value)
+    return Number.isNaN(ms) ? null : ms
+  }
+  return unit === 'seconds' ? value * 1000 : value
+}
+
 export function formatDuration(
-  submitTime?: number,
-  finishTime?: number,
+  submitTime?: number | string,
+  finishTime?: number | string,
   unit: 'seconds' | 'milliseconds' = 'milliseconds'
 ): { durationSec: number; variant: StatusBadgeProps['variant'] } | null {
-  if (!submitTime || !finishTime) return null
+  const s = toDurationMs(submitTime, unit)
+  const f = toDurationMs(finishTime, unit)
+  if (s == null || f == null) return null
 
-  const durationSec =
-    unit === 'milliseconds'
-      ? (finishTime - submitTime) / 1000
-      : finishTime - submitTime
+  const durationSec = (f - s) / 1000
 
   return { durationSec, variant: durationSec > 60 ? 'red' : 'green' }
 }

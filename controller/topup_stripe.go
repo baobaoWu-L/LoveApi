@@ -106,7 +106,7 @@ func (*StripeAdaptor) RequestPay(c *gin.Context, req *StripePayRequest) {
 		TradeNo:         referenceId,
 		PaymentMethod:   model.PaymentMethodStripe,
 		PaymentProvider: model.PaymentProviderStripe,
-		CreateTime:      time.Now().Unix(),
+		CreateTime:      time.Now(),
 		Status:          common.TopUpStatusPending,
 	}
 	err = topUp.Insert()

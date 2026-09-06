@@ -9,6 +9,7 @@ import (
 	"github.com/QuantumNous/new-api/i18n"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/oauth"
+	"github.com/QuantumNous/new-api/setting/system_setting"
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -28,6 +29,7 @@ func GenerateOAuthCode(c *gin.Context) {
 		session.Set("aff", affCode)
 	}
 	session.Set("oauth_state", state)
+	session.Set("oauth_legal_consent", c.Query("legal_consent") == "1")
 	err := session.Save()
 	if err != nil {
 		common.ApiError(c, err)
@@ -111,6 +113,8 @@ func HandleOAuth(c *gin.Context) {
 			common.ApiErrorI18n(c, i18n.MsgOAuthUserDeleted)
 		case *OAuthRegistrationDisabledError:
 			common.ApiErrorI18n(c, i18n.MsgUserRegisterDisabled)
+		case *OAuthLegalConsentRequiredError:
+			common.ApiErrorI18n(c, i18n.MsgUserLegalConsentRequired)
 		default:
 			common.ApiError(c, err)
 		}
@@ -236,6 +240,10 @@ func findOrCreateOAuthUser(c *gin.Context, provider oauth.Provider, oauthUser *o
 	if !common.RegisterEnabled {
 		return nil, &OAuthRegistrationDisabledError{}
 	}
+	legal := system_setting.GetLegalSettings()
+	if (legal.UserAgreement != "" || legal.PrivacyPolicy != "") && session.Get("oauth_legal_consent") != true {
+		return nil, &OAuthLegalConsentRequiredError{}
+	}
 
 	// Set up new user
 	user.Username = provider.GetProviderPrefix() + strconv.Itoa(model.GetMaxUserId()+1)
@@ -341,6 +349,12 @@ type OAuthRegistrationDisabledError struct{}
 
 func (e *OAuthRegistrationDisabledError) Error() string {
 	return "registration is disabled"
+}
+
+type OAuthLegalConsentRequiredError struct{}
+
+func (e *OAuthLegalConsentRequiredError) Error() string {
+	return "legal consent is required"
 }
 
 // handleOAuthError handles OAuth errors and returns translated message

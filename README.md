@@ -1,8 +1,8 @@
 <div align="center">
 
-![new-api](/web/default/public/logo.png)
+![Love-api](/web/default/public/logo.png)
 
-# New API
+# Love API
 
 🍥 **Next-Generation LLM Gateway and AI Asset Management System**
 

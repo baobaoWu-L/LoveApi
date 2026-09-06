@@ -58,13 +58,14 @@ import {
   isViolationFeeLog,
   getFirstResponseTimeColor,
   getResponseTimeColor,
+  getImageBilling,
 } from '../../lib/format'
 import {
   getLogTypeConfig,
   isPerCallBilling,
   isTimingLogType,
 } from '../../lib/utils'
-import type { LogOtherData } from '../../types'
+import type { LogOtherData, TaskLog } from '../../types'
 
 function timingTextColorClass(
   variant: 'success' | 'warning' | 'danger'
@@ -1046,6 +1047,122 @@ export function DetailsDialog(props: DetailsDialogProps) {
         </ScrollArea>
       </DialogContent>
     </Dialog>
+  )
+}
+
+/**
+ * Inline, first-party-only details rendered beneath a usage-log row.
+ * This deliberately excludes provider/channel metadata and generated asset
+ * URLs; the usage log is a billing and request audit, not an upstream trace.
+ */
+export function InlineLogDetails({
+  log,
+}: {
+  log: UsageLog
+}) {
+  const { t } = useTranslation()
+  const other = parseLogOther(log.other)
+  const image = getImageBilling(other)
+  const isImage = Boolean(other?.image_billing || other?.image || image.hasBilling)
+  const hasTokens = log.prompt_tokens > 0 || log.completion_tokens > 0
+  const hasCore = Boolean(log.request_id || other?.request_path || log.is_stream)
+
+  return (
+    <div className='bg-muted/20 border-border/60 min-w-0 border-t px-4 py-3 sm:px-6'>
+      <div className='grid min-w-0 gap-3 sm:grid-cols-2'>
+        <DetailSection label={t('Log Details')}>
+          {log.request_id && (
+            <DetailRow label={t('Request ID')} value={log.request_id} mono />
+          )}
+          <DetailRow
+            label={t('Stream Mode')}
+            value={t(log.is_stream ? 'Streaming' : 'Non-stream')}
+          />
+          {other?.request_path && (
+            <DetailRow label={t('Path')} value={other.request_path} mono />
+          )}
+          {other?.reasoning_effort && (
+            <DetailRow label={t('Reasoning Effort')} value={other.reasoning_effort} />
+          )}
+          {!hasCore && !isImage && (
+            <DetailRow label={t('Status')} value={t('Completed')} />
+          )}
+        </DetailSection>
+
+        {isImage ? (
+          <DetailSection label={t('Image Details')}>
+            {image.size && <DetailRow label={t('Size:')} value={image.size} mono />}
+            {image.quality && (
+              <DetailRow label={t('Generation quality preset')} value={image.quality} />
+            )}
+            {image.tier && <DetailRow label={t('Resolution')} value={image.tier.toUpperCase()} />}
+            {image.count != null && (
+              <DetailRow label={t('Quantity')} value={String(image.count)} mono />
+            )}
+            {image.unitPrice != null && (
+              <DetailRow
+                label={t('Model Price')}
+                value={formatBillingCurrencyFromUSD(image.unitPrice, { digitsLarge: 4, digitsSmall: 6, abbreviate: false })}
+                mono
+              />
+            )}
+            {image.actualPriceUsd != null && (
+              <DetailRow
+                label={t('Cost')}
+                value={formatBillingCurrencyFromUSD(image.actualPriceUsd, { digitsLarge: 4, digitsSmall: 6, abbreviate: false })}
+                mono
+              />
+            )}
+          </DetailSection>
+        ) : (
+          <>
+            {hasTokens && other && <TokenBreakdown log={log} other={other} />}
+            {other && <BillingBreakdown log={log} other={other} isAdmin={false} />}
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
+
+/** Minimal first-party details for asynchronous video/task records. */
+export function InlineTaskDetails({ log }: { log: TaskLog }) {
+  const { t } = useTranslation()
+  const other = parseLogOther(log.other || '')
+  const duration = log.finish_time && log.submit_time
+    ? Math.max(0, log.finish_time - log.submit_time)
+    : undefined
+  return (
+    <div className='bg-muted/20 border-border/60 min-w-0 border-t px-4 py-3 sm:px-6'>
+      <div className='grid min-w-0 gap-3 sm:grid-cols-2'>
+        <DetailSection label={t('Task Details')}>
+          <DetailRow label={t('Task ID')} value={log.task_id || '-'} mono />
+          <DetailRow label={t('Status')} value={t(log.status || 'Unknown')} />
+          <DetailRow label={t('Action')} value={t(log.action || 'Generate')} />
+          {other?.request_path && (
+            <DetailRow label={t('Path')} value={other.request_path} mono />
+          )}
+          {duration != null && (
+            <DetailRow label={t('Duration')} value={`${duration}s`} mono />
+          )}
+        </DetailSection>
+        <DetailSection label={t('Video Parameters')}>
+          {other?.seconds != null && (
+            <DetailRow label={t('Duration')} value={`${other.seconds}s`} mono />
+          )}
+          {other?.size != null && (
+            <DetailRow label={t('Size:')} value={String(other.size)} mono />
+          )}
+          {other?.aspect_ratio != null && (
+            <DetailRow label={t('Output aspect ratio')} value={String(other.aspect_ratio)} />
+          )}
+          {other?.resolution_tier != null && (
+            <DetailRow label={t('Resolution')} value={String(other.resolution_tier)} />
+          )}
+          {log.fail_reason && <DetailRow label={t('Error')} value={log.fail_reason} />}
+        </DetailSection>
+      </div>
+    </div>
   )
 }
 

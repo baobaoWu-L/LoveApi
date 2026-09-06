@@ -46,7 +46,7 @@ func insertSubscriptionOrderForPaymentGuardTest(t *testing.T, tradeNo string, us
 		PaymentMethod:   paymentProvider,
 		PaymentProvider: paymentProvider,
 		Status:          common.TopUpStatusPending,
-		CreateTime:      time.Now().Unix(),
+		CreateTime:      time.Now(),
 	}
 	require.NoError(t, order.Insert())
 }
@@ -61,7 +61,7 @@ func insertTopUpForPaymentGuardTest(t *testing.T, tradeNo string, userID int, pa
 		PaymentMethod:   paymentProvider,
 		PaymentProvider: paymentProvider,
 		Status:          common.TopUpStatusPending,
-		CreateTime:      time.Now().Unix(),
+		CreateTime:      time.Now(),
 	}
 	require.NoError(t, topUp.Insert())
 }

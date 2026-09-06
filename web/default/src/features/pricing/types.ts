@@ -47,12 +47,16 @@ export type PricingModel = {
   enable_groups: string[]
   tags?: string
   supported_endpoint_types?: string[]
+  /** Fixed per-request USD prices by tier, e.g. image resolution. */
+  request_pricing?: Record<string, number>
   key?: string
   group_ratio?: Record<string, number>
   /** Billing mode (e.g. "tiered_expr") used to flag dynamic pricing */
   billing_mode?: string
   /** Raw expression describing dynamic / tiered billing */
   billing_expr?: string
+  billing_mode_by_group?: Record<string, string>
+  billing_expr_by_group?: Record<string, string>
   /** Pricing version returned by backend, useful for cache busting */
   pricing_version?: string
   /**

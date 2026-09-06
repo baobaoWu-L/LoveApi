@@ -39,9 +39,18 @@ func GetAllEnableAbilityWithChannels() ([]AbilityWithChannel, error) {
 }
 
 func GetGroupEnabledModels(group string) []string {
-	var models []string
-	// Find distinct models
-	DB.Table("abilities").Where(commonGroupCol+" = ? and enabled = ?", group, true).Distinct("model").Pluck("model", &models)
+	var abilities []Ability
+	DB.Where("enabled = ?", true).Find(&abilities)
+	seen := make(map[string]struct{})
+	models := make([]string, 0)
+	for _, ability := range abilities {
+		if strings.EqualFold(ability.Group, group) {
+			if _, exists := seen[ability.Model]; !exists {
+				seen[ability.Model] = struct{}{}
+				models = append(models, ability.Model)
+			}
+		}
+	}
 	return models
 }
 
@@ -104,6 +113,12 @@ func getChannelQuery(group string, model string, retry int) (*gorm.DB, error) {
 }
 
 func GetChannel(group string, model string, retry int) (*Channel, error) {
+	return GetChannelWithExclusions(group, model, retry, nil)
+}
+
+// GetChannelWithExclusions selects an enabled channel for a group/model while
+// excluding channels already attempted during the current request.
+func GetChannelWithExclusions(group string, model string, retry int, excluded map[int]struct{}) (*Channel, error) {
 	var abilities []Ability
 
 	var err error = nil
@@ -118,6 +133,15 @@ func GetChannel(group string, model string, retry int) (*Channel, error) {
 	}
 	if err != nil {
 		return nil, err
+	}
+	if len(excluded) > 0 {
+		filtered := abilities[:0]
+		for _, ability := range abilities {
+			if _, skip := excluded[ability.ChannelId]; !skip {
+				filtered = append(filtered, ability)
+			}
+		}
+		abilities = filtered
 	}
 	channel := Channel{}
 	if len(abilities) > 0 {

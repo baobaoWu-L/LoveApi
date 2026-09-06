@@ -97,7 +97,7 @@ func CheckSetup() {
 			// Create setup record
 			newSetup := Setup{
 				Version:       common.Version,
-				InitializedAt: time.Now().Unix(),
+				InitializedAt: time.Now(),
 			}
 			err := DB.Create(&newSetup).Error
 			if err != nil {
@@ -110,7 +110,7 @@ func CheckSetup() {
 		}
 	} else {
 		// Setup record exists, system is initialized
-		common.SysLog("system is already initialized at: " + time.Unix(setup.InitializedAt, 0).String())
+		common.SysLog("system is already initialized at: " + setup.InitializedAt.String())
 		constant.Setup = true
 	}
 }
@@ -281,6 +281,7 @@ func migrateDB() error {
 		&CustomOAuthProvider{},
 		&UserOAuthBinding{},
 		&PerfMetric{},
+		&CanvasHistory{},
 	)
 	if err != nil {
 		return err
@@ -330,6 +331,7 @@ func migrateDBFast() error {
 		{&CustomOAuthProvider{}, "CustomOAuthProvider"},
 		{&UserOAuthBinding{}, "UserOAuthBinding"},
 		{&PerfMetric{}, "PerfMetric"},
+		{&CanvasHistory{}, "CanvasHistory"},
 	}
 	// 动态计算migration数量，确保errChan缓冲区足够大
 	errChan := make(chan error, len(migrations))
@@ -371,6 +373,23 @@ func migrateLOGDB() error {
 	var err error
 	if err = LOG_DB.AutoMigrate(&Log{}); err != nil {
 		return err
+	}
+	// Keep historical usage records aligned with the privacy-minimal schema:
+	// usage logs retain accounting/token counters but no request/response text
+	// or billing debug payloads.
+	if err = LOG_DB.Model(&Log{}).
+		Where("type = ?", LogTypeConsume).
+		Updates(map[string]interface{}{"content": "", "other": ""}).Error; err != nil {
+		return err
+	}
+	if DB.Migrator().HasTable(&Midjourney{}) {
+		if err = DB.Model(&Midjourney{}).
+			Where("prompt <> '' OR prompt_en <> '' OR description <> '' OR buttons <> '' OR properties <> ''").
+			Updates(map[string]interface{}{
+				"prompt": "", "prompt_en": "", "description": "", "buttons": "", "properties": "",
+			}).Error; err != nil {
+			return err
+		}
 	}
 	return nil
 }

@@ -239,6 +239,19 @@ export interface UserWalletData {
   group: string
 }
 
+/** Administrator-only aggregate of configured upstream channel accounts. */
+export interface UpstreamBalanceSummary {
+  balance_usd: number
+  used_usd: number
+  balance: number
+  used_quota: number
+  request_count: number
+  channel_count: number
+  updated_channel_count: number
+  failed_channel_count: number
+  updated_at: number
+}
+
 /**
  * Topup record status
  */
@@ -261,9 +274,9 @@ export interface TopupRecord {
   /** Payment method type */
   payment_method: string
   /** Creation timestamp */
-  create_time: number
+  create_time: number | string
   /** Completion timestamp */
-  complete_time?: number
+  complete_time?: number | string | null
   /** Payment status */
   status: TopupStatus
 }

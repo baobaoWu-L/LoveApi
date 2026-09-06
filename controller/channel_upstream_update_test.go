@@ -127,6 +127,20 @@ func TestCollectPendingUpstreamModelChangesFromModels_WithIgnoredRegexPatterns(t
 	require.Equal(t, []string{}, pendingRemoveModels)
 }
 
+func TestCollectPendingUpstreamModelChangesFromModels_HardExclusions(t *testing.T) {
+	pendingAddModels, pendingRemoveModels := collectPendingUpstreamModelChangesFromModels(
+		[]string{"MiniMax-M2.7", "MiniMax-M3"},
+		[]string{"minimax-m2.7", "minimax-m3", "comfyui-minimax-h3-r2v", "MiniMax-M2.7", "MiniMax-M3"},
+		nil,
+		nil,
+	)
+
+	// Deprecated lowercase/custom models are never auto-added, while the
+	// explicitly supported uppercase variants remain available.
+	require.Empty(t, pendingAddModels)
+	require.Empty(t, pendingRemoveModels)
+}
+
 func TestBuildUpstreamModelUpdateTaskNotificationContent_OmitOverflowDetails(t *testing.T) {
 	channelSummaries := make([]upstreamModelUpdateChannelSummary, 0, 12)
 	for i := 0; i < 12; i++ {

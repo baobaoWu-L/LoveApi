@@ -1,5 +1,12 @@
 package model
 
+import (
+	"strconv"
+	"time"
+
+	"gorm.io/gorm"
+)
+
 type Midjourney struct {
 	Id          int    `json:"id"`
 	Code        int    `json:"code"`
@@ -9,10 +16,10 @@ type Midjourney struct {
 	Prompt      string `json:"prompt"`
 	PromptEn    string `json:"prompt_en"`
 	Description string `json:"description"`
-	State       string `json:"state"`
-	SubmitTime  int64  `json:"submit_time" gorm:"index"`
-	StartTime   int64  `json:"start_time" gorm:"index"`
-	FinishTime  int64  `json:"finish_time" gorm:"index"`
+	State       string    `json:"state"`
+	SubmitTime  time.Time `json:"submit_time" gorm:"type:datetime;index"`
+	StartTime   time.Time `json:"start_time" gorm:"type:datetime;index"`
+	FinishTime  time.Time `json:"finish_time" gorm:"type:datetime;index"`
 	ImageUrl    string `json:"image_url"`
 	VideoUrl    string `json:"video_url"`
 	VideoUrls   string `json:"video_urls"`
@@ -25,12 +32,85 @@ type Midjourney struct {
 	Properties  string `json:"properties"`
 }
 
+// BeforeCreate 在任务入库前填充时间字段，避免 time.Time 零值写入 MySQL
+// 触发 '0000-00-00' DATETIME 报错(NO_ZERO_DATE)。
+func (m *Midjourney) BeforeCreate(tx *gorm.DB) error {
+	now := time.Now()
+	if m.SubmitTime.IsZero() {
+		m.SubmitTime = now
+	}
+	if m.StartTime.IsZero() {
+		m.StartTime = now
+	}
+	if m.FinishTime.IsZero() {
+		m.FinishTime = now
+	}
+	return nil
+}
+
+// MsToTime 将 unix 毫秒时间戳转换为 time.Time，0 或负值返回零值。
+func MsToTime(ms int64) time.Time {
+	if ms <= 0 {
+		return time.Time{}
+	}
+	return time.UnixMilli(ms)
+}
+
+// SubmitTimeMs 返回 submit_time 的 unix 毫秒，零值返回 0（供外部 DTO 使用）。
+func (m *Midjourney) SubmitTimeMs() int64 {
+	if m.SubmitTime.IsZero() {
+		return 0
+	}
+	return m.SubmitTime.UnixMilli()
+}
+
+// StartTimeMs 返回 start_time 的 unix 毫秒，零值返回 0。
+func (m *Midjourney) StartTimeMs() int64 {
+	if m.StartTime.IsZero() {
+		return 0
+	}
+	return m.StartTime.UnixMilli()
+}
+
+// FinishTimeMs 返回 finish_time 的 unix 毫秒，零值返回 0。
+func (m *Midjourney) FinishTimeMs() int64 {
+	if m.FinishTime.IsZero() {
+		return 0
+	}
+	return m.FinishTime.UnixMilli()
+}
+
+// BeforeSave prevents user-provided prompts and descriptive payloads from
+// being persisted in usage/task records. Task IDs, status, timing and billing
+// fields remain available for polling and accounting.
+func (m *Midjourney) BeforeSave(_ *gorm.DB) error {
+	m.Prompt = ""
+	m.PromptEn = ""
+	m.Description = ""
+	m.Buttons = ""
+	m.Properties = ""
+	return nil
+}
+
 // TaskQueryParams 用于包含所有搜索条件的结构体，可以根据需求添加更多字段
 type TaskQueryParams struct {
 	ChannelID      string
 	MjID           string
 	StartTimestamp string
 	EndTimestamp   string
+}
+
+// queryMsToTime 将查询参数中的 unix 毫秒字符串转换为 time.Time，无法解析或为空返回 nil。
+func queryMsToTime(s string) *time.Time {
+	if s == "" {
+		return nil
+	}
+	ms, err := strconv.ParseInt(s, 10, 64)
+	if err != nil || ms <= 0 {
+		return nil
+	}
+	t := time.UnixMilli(ms)
+	return &t
 }
 
 func GetAllUserTask(userId int, startIdx int, num int, queryParams TaskQueryParams) []*Midjourney {
@@ -43,12 +123,11 @@ func GetAllUserTask(userId int, startIdx int, num int, queryParams TaskQueryPara
 	if queryParams.MjID != "" {
 		query = query.Where("mj_id = ?", queryParams.MjID)
 	}
-	if queryParams.StartTimestamp != "" {
-		// 假设您已将前端传来的时间戳转换为数据库所需的时间格式，并处理了时间戳的验证和解析
-		query = query.Where("submit_time >= ?", queryParams.StartTimestamp)
+	if start := queryMsToTime(queryParams.StartTimestamp); start != nil {
+		query = query.Where("submit_time >= ?", *start)
 	}
-	if queryParams.EndTimestamp != "" {
-		query = query.Where("submit_time <= ?", queryParams.EndTimestamp)
+	if end := queryMsToTime(queryParams.EndTimestamp); end != nil {
+		query = query.Where("submit_time <= ?", *end)
 	}
 
 	// 获取数据
@@ -74,11 +153,11 @@ func GetAllTasks(startIdx int, num int, queryParams TaskQueryParams) []*Midjourn
 	if queryParams.MjID != "" {
 		query = query.Where("mj_id = ?", queryParams.MjID)
 	}
-	if queryParams.StartTimestamp != "" {
-		query = query.Where("submit_time >= ?", queryParams.StartTimestamp)
+	if start := queryMsToTime(queryParams.StartTimestamp); start != nil {
+		query = query.Where("submit_time >= ?", *start)
 	}
-	if queryParams.EndTimestamp != "" {
-		query = query.Where("submit_time <= ?", queryParams.EndTimestamp)
+	if end := queryMsToTime(queryParams.EndTimestamp); end != nil {
+		query = query.Where("submit_time <= ?", *end)
 	}
 
 	// 获取数据
@@ -192,11 +271,11 @@ func CountAllTasks(queryParams TaskQueryParams) int64 {
 	if queryParams.MjID != "" {
 		query = query.Where("mj_id = ?", queryParams.MjID)
 	}
-	if queryParams.StartTimestamp != "" {
-		query = query.Where("submit_time >= ?", queryParams.StartTimestamp)
+	if start := queryMsToTime(queryParams.StartTimestamp); start != nil {
+		query = query.Where("submit_time >= ?", *start)
 	}
-	if queryParams.EndTimestamp != "" {
-		query = query.Where("submit_time <= ?", queryParams.EndTimestamp)
+	if end := queryMsToTime(queryParams.EndTimestamp); end != nil {
+		query = query.Where("submit_time <= ?", *end)
 	}
 	_ = query.Count(&total).Error
 	return total
@@ -209,11 +288,11 @@ func CountAllUserTask(userId int, queryParams TaskQueryParams) int64 {
 	if queryParams.MjID != "" {
 		query = query.Where("mj_id = ?", queryParams.MjID)
 	}
-	if queryParams.StartTimestamp != "" {
-		query = query.Where("submit_time >= ?", queryParams.StartTimestamp)
+	if start := queryMsToTime(queryParams.StartTimestamp); start != nil {
+		query = query.Where("submit_time >= ?", *start)
 	}
-	if queryParams.EndTimestamp != "" {
-		query = query.Where("submit_time <= ?", queryParams.EndTimestamp)
+	if end := queryMsToTime(queryParams.EndTimestamp); end != nil {
+		query = query.Where("submit_time <= ?", *end)
 	}
 	_ = query.Count(&total).Error
 	return total

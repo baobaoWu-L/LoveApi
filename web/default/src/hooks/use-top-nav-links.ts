@@ -33,6 +33,7 @@ const DEFAULT_HEADER_NAV_MODULES = {
   home: true,
   console: true,
   pricing: { enabled: true, requireAuth: false },
+  'api-doc': true,
   rankings: { enabled: true, requireAuth: false },
   docs: true,
   about: true,
@@ -135,6 +136,11 @@ export function useTopNavLinks(): TopNavLink[] {
   if (pricing && typeof pricing === 'object' && pricing.enabled) {
     const disabled = pricing.requireAuth && !isAuthed
     links.push({ title: t('Model Square'), href: '/pricing', disabled })
+  }
+
+  // API Doc
+  if (modules?.['api-doc'] !== false) {
+    links.push({ title: t('API Documentation'), href: '/api-doc' })
   }
 
   // Rankings

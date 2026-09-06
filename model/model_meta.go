@@ -2,8 +2,7 @@ package model
 
 import (
 	"strconv"
-
-	"github.com/QuantumNous/new-api/common"
+	"time"
 
 	"gorm.io/gorm"
 )
@@ -30,8 +29,8 @@ type Model struct {
 	Endpoints    string         `json:"endpoints,omitempty" gorm:"type:text"`
 	Status       int            `json:"status" gorm:"default:1"`
 	SyncOfficial int            `json:"sync_official" gorm:"default:1"`
-	CreatedTime  int64          `json:"created_time" gorm:"bigint"`
-	UpdatedTime  int64          `json:"updated_time" gorm:"bigint"`
+	CreatedTime  time.Time `json:"created_time" gorm:"column:created_time"`
+	UpdatedTime  time.Time `json:"updated_time" gorm:"column:updated_time"`
 	DeletedAt    gorm.DeletedAt `json:"-" gorm:"index;uniqueIndex:uk_model_name_delete_at,priority:2"`
 
 	BoundChannels []BoundChannel `json:"bound_channels,omitempty" gorm:"-"`
@@ -44,7 +43,7 @@ type Model struct {
 }
 
 func (mi *Model) Insert() error {
-	now := common.GetTimestamp()
+	now := time.Now()
 	mi.CreatedTime = now
 	mi.UpdatedTime = now
 
@@ -74,7 +73,7 @@ func IsModelNameDuplicated(id int, name string) (bool, error) {
 }
 
 func (mi *Model) Update() error {
-	mi.UpdatedTime = common.GetTimestamp()
+	mi.UpdatedTime = time.Now()
 	// 使用 Select 强制更新所有字段，包括零值
 	return DB.Model(&Model{}).Where("id = ?", mi.Id).
 		Select("model_name", "description", "icon", "tags", "vendor_id", "endpoints", "status", "sync_official", "name_rule", "updated_time").
@@ -133,6 +132,63 @@ func GetBoundChannelsByModelsMap(modelNames []string) (map[string][]BoundChannel
 		result[r.Model] = append(result[r.Model], BoundChannel{Name: r.Name, Type: r.Type})
 	}
 	return result, nil
+}
+
+// SyncPricingToModelMeta reads all model names from pricing config and creates
+// model_meta records for any that don't already exist. Returns the count of new records.
+func SyncPricingToModelMeta() (int, error) {
+	// Use enabled channel abilities as the source. Pricing intentionally only
+	// exposes models that already have metadata, so using GetPricing here would
+	// create a circular dependency and prevent new models from being added.
+	pricingNames := GetEnabledModels()
+	if len(pricingNames) == 0 {
+		return 0, nil
+	}
+
+	// Find which already exist in model_meta
+	var existing []string
+	if err := DB.Model(&Model{}).Where("model_name IN ?", pricingNames).Pluck("model_name", &existing).Error; err != nil {
+		return 0, err
+	}
+	existingSet := make(map[string]struct{}, len(existing))
+	for _, e := range existing {
+		existingSet[e] = struct{}{}
+	}
+
+	// Build vendor name -> id map from pricing
+	type pricingInfo struct {
+		OwnerBy string
+	}
+	vendorMap := make(map[string]int)
+	var vendors []PricingVendor
+	vendors = GetVendors()
+	for _, v := range vendors {
+		vendorMap[v.Name] = v.ID
+	}
+
+	now := time.Now()
+	added := 0
+	for _, name := range pricingNames {
+		if _, ok := existingSet[name]; ok {
+			continue
+		}
+		m := Model{
+			ModelName:    name,
+			Status:       1,
+			SyncOfficial: 0,
+			CreatedTime:  now,
+			UpdatedTime:  now,
+		}
+		if err := DB.Create(&m).Error; err != nil {
+			// Skip duplicates (race condition)
+			continue
+		}
+		added++
+	}
+	if added > 0 {
+		RefreshPricing()
+	}
+	return added, nil
 }
 
 func SearchModels(keyword string, vendor string, offset int, limit int) ([]*Model, int64, error) {

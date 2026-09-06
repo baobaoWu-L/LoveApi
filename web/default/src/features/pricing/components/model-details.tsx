@@ -21,6 +21,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useNavigate, useParams, useSearch } from '@tanstack/react-router'
 import { ArrowLeft, Code2, HeartPulse, Info, Timer } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import { getModelDescription } from '../lib/model-description'
 import { getLobeIcon } from '@/lib/lobe-icon'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -58,6 +59,7 @@ import {
   getDynamicPricingTiers,
   isDynamicPricingModel,
 } from '../lib/dynamic-price'
+import { formatTierConditionHint } from '../lib/billing-expr'
 import { parseTags } from '../lib/filters'
 import { getAvailableGroups, isTokenBasedModel } from '../lib/model-helpers'
 import { inferModelMetadata } from '../lib/model-metadata'
@@ -270,12 +272,10 @@ function ModelHeader(props: { model: PricingModel }) {
   const vendorIcon = model.vendor_icon
     ? getLobeIcon(model.vendor_icon, 20)
     : null
-  const description = model.description || model.vendor_description || null
+  const description = getModelDescription(model, t)
   const tags = parseTags(model.tags)
   const isSpecialExpression =
-    model.billing_mode === 'tiered_expr' &&
-    Boolean(model.billing_expr) &&
-    getDynamicPricingTiers(model).length === 0
+    isDynamicPricingModel(model) && getDynamicPricingTiers(model).length === 0
 
   return (
     <header className='pb-4'>
@@ -303,7 +303,7 @@ function ModelHeader(props: { model: PricingModel }) {
             ? t('Token-based')
             : t('Per Request')}
         </span>
-        {model.billing_mode === 'tiered_expr' && model.billing_expr && (
+        {isDynamicPricingModel(model) && (
           <>
             <span className='text-muted-foreground/30'>·</span>
             <span className='rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:bg-amber-500/20 dark:text-amber-300'>
@@ -398,6 +398,9 @@ function PriceSection(props: {
   ]
 
   if (dynamicSummary) {
+    if (dynamicSummary.tiers.length === 0 && dynamicSummary.primaryEntries.length === 0) {
+      return null
+    }
     if (dynamicSummary.isSpecialExpression) {
       return (
         <section>
@@ -697,6 +700,7 @@ function GroupPricingSection(props: {
         <div className='space-y-3'>
           {availableGroups.map((group) => {
             const ratio = props.groupRatio[group] || 1
+            const groupTiers = getDynamicPricingTiers(props.model, group)
             return (
               <div key={group} className='overflow-hidden rounded-lg border'>
                 <div className='bg-muted/20 flex items-center justify-between gap-3 border-b px-3 py-2'>
@@ -721,7 +725,7 @@ function GroupPricingSection(props: {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {dynamicTiers.map((tier, tierIndex) => {
+                      {groupTiers.map((tier, tierIndex) => {
                         const entries = getDynamicPriceEntries(tier, {
                           tokenUnit: props.tokenUnit,
                           showRechargePrice,
@@ -736,7 +740,12 @@ function GroupPricingSection(props: {
                         return (
                           <TableRow key={`${group}-${tier.label || tierIndex}`}>
                             <TableCell className='text-muted-foreground py-2.5 text-xs'>
-                              {tier.label || t('Default')}
+                              <div>{tier.label || t('Default')}</div>
+                              {formatTierConditionHint(tier) && (
+                                <div className='mt-0.5 text-[10px]'>
+                                  {formatTierConditionHint(tier)}
+                                </div>
+                              )}
                             </TableCell>
                             {priceFields.map((fieldEntry) => {
                               const entry = entryMap.get(fieldEntry.field)
@@ -911,9 +920,7 @@ export function ModelDetailsContent(props: ModelDetailsContentProps) {
   const showRechargePrice = props.showRechargePrice ?? false
   const metadata = useMemo(() => inferModelMetadata(props.model), [props.model])
 
-  const isDynamic =
-    props.model.billing_mode === 'tiered_expr' &&
-    Boolean(props.model.billing_expr)
+  const isDynamic = isDynamicPricingModel(props.model)
 
   return (
     <div className='@container/details space-y-4'>

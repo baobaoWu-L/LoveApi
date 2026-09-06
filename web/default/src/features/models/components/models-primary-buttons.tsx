@@ -23,8 +23,13 @@ import {
   List,
   Building2,
   AlertCircle,
+  ArrowLeftRight,
+  Loader2,
 } from 'lucide-react'
+import { useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
+import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -34,11 +39,14 @@ import {
   DropdownMenuShortcut,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import { syncFromPricing } from '../api'
 import { useModels } from './models-provider'
 
 export function ModelsPrimaryButtons() {
   const { t } = useTranslation()
   const { setOpen, setCurrentRow } = useModels()
+  const queryClient = useQueryClient()
+  const [syncingPricing, setSyncingPricing] = useState(false)
 
   const handleCreateModel = () => {
     setCurrentRow(null)
@@ -51,6 +59,28 @@ export function ModelsPrimaryButtons() {
 
   const handleSync = () => {
     setOpen('sync-wizard')
+  }
+
+  const handleSyncFromPricing = async () => {
+    setSyncingPricing(true)
+    try {
+      const res = await syncFromPricing()
+      if (res.success) {
+        const added = res.data?.added ?? 0
+        if (added > 0) {
+          toast.success(t('Synced {{count}} models from pricing', { count: added }))
+          queryClient?.invalidateQueries({ queryKey: ['models'] })
+        } else {
+          toast.info(t('All pricing models already exist in metadata'))
+        }
+      } else {
+        toast.error(res.message || t('Sync failed'))
+      }
+    } catch {
+      toast.error(t('Sync failed'))
+    } finally {
+      setSyncingPricing(false)
+    }
   }
 
   const handlePrefillGroups = () => {
@@ -86,6 +116,17 @@ export function ModelsPrimaryButtons() {
             {t('Sync Upstream')}
             <DropdownMenuShortcut>
               <RefreshCw className='h-4 w-4' />
+            </DropdownMenuShortcut>
+          </DropdownMenuItem>
+
+          <DropdownMenuItem onClick={handleSyncFromPricing} disabled={syncingPricing}>
+            {syncingPricing ? t('Syncing...') : t('Sync from Pricing')}
+            <DropdownMenuShortcut>
+              {syncingPricing ? (
+                <Loader2 className='h-4 w-4 animate-spin' />
+              ) : (
+                <ArrowLeftRight className='h-4 w-4' />
+              )}
             </DropdownMenuShortcut>
           </DropdownMenuItem>
 

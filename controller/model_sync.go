@@ -56,14 +56,53 @@ type upstreamEnvelope[T any] struct {
 }
 
 type upstreamModel struct {
-	Description string          `json:"description"`
-	Endpoints   json.RawMessage `json:"endpoints"`
-	Icon        string          `json:"icon"`
-	ModelName   string          `json:"model_name"`
-	NameRule    int             `json:"name_rule"`
-	Status      int             `json:"status"`
-	Tags        string          `json:"tags"`
-	VendorName  string          `json:"vendor_name"`
+	Description         string          `json:"description"`
+	Endpoints           json.RawMessage `json:"endpoints"`
+	Icon                string          `json:"icon"`
+	ModelName           string          `json:"model_name"`
+	NameRule            int             `json:"name_rule"`
+	Status              int             `json:"status"`
+	Tags                string          `json:"tags"`
+	VendorName          string          `json:"vendor_name"`
+	PricePerMInput      *float64        `json:"price_per_m_input"`
+	PricePerMOutput     *float64        `json:"price_per_m_output"`
+	PricePerMCacheRead  *float64        `json:"price_per_m_cache_read"`
+	PricePerMCacheWrite *float64        `json:"price_per_m_cache_write"`
+}
+
+// normalizeModelEndpoints preserves an upstream endpoint declaration as JSON.
+// A null/empty declaration intentionally becomes an empty string so pricing
+// can derive protocols from the enabled channel adapters.
+func normalizeModelEndpoints(raw json.RawMessage) string {
+	if len(raw) == 0 || string(raw) == "null" {
+		return ""
+	}
+	var endpoints interface{}
+	if err := common.Unmarshal(raw, &endpoints); err != nil || endpoints == nil {
+		return ""
+	}
+	data, err := common.Marshal(endpoints)
+	if err != nil {
+		return ""
+	}
+	return string(data)
+}
+
+// endpointsConflict compares only when the upstream explicitly declares
+// endpoint metadata. The metadata feed currently uses null for many models;
+// that means "unspecified", not an instruction to erase a working local
+// endpoint configuration. JSON objects are re-marshaled through common so
+// equivalent key ordering does not create a false conflict.
+func endpointsConflict(local string, upstream json.RawMessage) bool {
+	upstreamNormalized := normalizeModelEndpoints(upstream)
+	if upstreamNormalized == "" {
+		return false
+	}
+	localNormalized := normalizeModelEndpoints(json.RawMessage(local))
+	if localNormalized != "" {
+		return localNormalized != upstreamNormalized
+	}
+	return strings.TrimSpace(local) != upstreamNormalized
 }
 
 type upstreamVendor struct {
@@ -380,6 +419,7 @@ func SyncUpstreamModels(c *gin.Context) {
 			VendorID:    vendorID,
 			Status:      chooseStatus(up.Status, 1),
 			NameRule:    up.NameRule,
+			Endpoints:   normalizeModelEndpoints(up.Endpoints),
 		}
 		if err := mi.Insert(); err == nil {
 			createdModels++
@@ -436,6 +476,14 @@ func SyncUpstreamModels(c *gin.Context) {
 				if containsField(ow.Fields, "status") {
 					local.Status = chooseStatus(up.Status, local.Status)
 					needUpdate = true
+				}
+				if containsField(ow.Fields, "endpoints") {
+					// A null/empty upstream endpoint declaration is unspecified;
+					// preserve the local project-compatible endpoint in that case.
+					if normalized := normalizeModelEndpoints(up.Endpoints); normalized != "" {
+						local.Endpoints = normalized
+						needUpdate = true
+					}
 				}
 				if !needUpdate {
 					return nil
@@ -593,7 +641,7 @@ func SyncUpstreamPreview(c *gin.Context) {
 		if !ok {
 			continue
 		}
-		fields := make([]conflictField, 0, 6)
+		fields := make([]conflictField, 0, 7)
 		if strings.TrimSpace(local.Description) != strings.TrimSpace(up.Description) {
 			fields = append(fields, conflictField{Field: "description", Local: local.Description, Upstream: up.Description})
 		}
@@ -613,6 +661,10 @@ func SyncUpstreamPreview(c *gin.Context) {
 		}
 		if local.Status != chooseStatus(up.Status, local.Status) {
 			fields = append(fields, conflictField{Field: "status", Local: local.Status, Upstream: up.Status})
+		}
+		if endpointsConflict(local.Endpoints, up.Endpoints) {
+			upstreamEndpoints := normalizeModelEndpoints(up.Endpoints)
+			fields = append(fields, conflictField{Field: "endpoints", Local: local.Endpoints, Upstream: upstreamEndpoints})
 		}
 		if len(fields) > 0 {
 			conflicts = append(conflicts, conflictItem{ModelName: local.ModelName, Fields: fields})

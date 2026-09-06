@@ -41,6 +41,10 @@ interface MobileCardListProps<TData> {
   emptyDescription?: string
   getRowKey?: (row: Row<TData>) => string | number
   getRowClassName?: (row: Row<TData>) => string | undefined
+  onRowClick?: (row: Row<TData>, event: React.MouseEvent<HTMLDivElement>) => void
+  onRowKeyDown?: (row: Row<TData>, event: React.KeyboardEvent<HTMLDivElement>) => void
+  expandedRowKey?: string | number | null
+  renderExpandedRow?: (row: Row<TData>) => React.ReactNode
 }
 
 interface MobileColumnMeta {
@@ -259,6 +263,10 @@ export function MobileCardList<TData>(props: MobileCardListProps<TData>) {
     emptyDescription,
     getRowKey,
     getRowClassName,
+    onRowClick,
+    onRowKeyDown,
+    expandedRowKey,
+    renderExpandedRow,
   } = props
   const { t } = useTranslation()
 
@@ -298,12 +306,31 @@ export function MobileCardList<TData>(props: MobileCardListProps<TData>) {
     <div className='divide-y overflow-hidden rounded-lg border'>
       {rows.map((row) => {
         const key = getRowKey ? getRowKey(row) : row.id
+        const expanded = expandedRowKey != null && expandedRowKey === key
         return (
-          <div
-            key={key}
-            className={cn('bg-card px-3 py-2.5', getRowClassName?.(row))}
-          >
-            <RowComponent row={row} />
+          <div key={key}>
+            <div
+              className={cn(
+                'bg-card px-3 py-2.5',
+                onRowClick && 'cursor-pointer focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
+                getRowClassName?.(row)
+              )}
+              tabIndex={onRowClick ? 0 : undefined}
+              aria-expanded={onRowClick ? expanded : undefined}
+              onClick={
+                onRowClick
+                  ? (event) => {
+                      const target = event.target as HTMLElement
+                      if (target.closest('button, a, input, textarea, select, [role="button"]')) return
+                      onRowClick(row, event)
+                    }
+                  : undefined
+              }
+              onKeyDown={onRowKeyDown ? (event) => onRowKeyDown(row, event) : undefined}
+            >
+              <RowComponent row={row} />
+            </div>
+            {expanded && renderExpandedRow?.(row)}
           </div>
         )
       })}

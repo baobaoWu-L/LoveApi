@@ -3,6 +3,7 @@ package router
 import (
 	"github.com/QuantumNous/new-api/controller"
 	"github.com/QuantumNous/new-api/middleware"
+	"github.com/QuantumNous/new-api/relay"
 
 	// Import oauth package to register providers via init()
 	_ "github.com/QuantumNous/new-api/oauth"
@@ -12,6 +13,17 @@ import (
 )
 
 func SetApiRouter(router *gin.Engine) {
+	// Keep the canvas socket outside the gzip/API response middleware; those
+	// middleware wrap HTTP bodies and can interfere with WebSocket upgrades.
+	canvasRouter := router.Group("/api/canvas")
+	canvasRouter.GET("/ws", relay.CanvasWebSocket)
+	canvasHistoryRouter := canvasRouter.Group("/history")
+	canvasHistoryRouter.Use(middleware.UserAuth())
+	canvasHistoryRouter.GET("", controller.GetCanvasHistory)
+	canvasHistoryRouter.GET("/:image_id/image", controller.GetCanvasHistoryImage)
+	canvasHistoryRouter.POST("", controller.SaveCanvasHistory)
+	canvasHistoryRouter.DELETE("", controller.DeleteCanvasHistory)
+
 	apiRouter := router.Group("/api")
 	apiRouter.Use(middleware.RouteTag("api"))
 	apiRouter.Use(gzip.Gzip(gzip.DefaultCompression))
@@ -60,11 +72,14 @@ func SetApiRouter(router *gin.Engine) {
 
 		// Universal secure verification routes
 		apiRouter.POST("/verify", middleware.UserAuth(), middleware.CriticalRateLimit(), controller.UniversalVerify)
+		// 跨域图片下载代理（服务端 fetch，供历史生成图直接保存）
+		apiRouter.GET("/image/download", middleware.UserAuth(), controller.ImageDownload)
 
 		userRoute := apiRouter.Group("/user")
 		{
 			userRoute.POST("/register", middleware.CriticalRateLimit(), middleware.TurnstileCheck(), controller.Register)
 			userRoute.POST("/login", middleware.CriticalRateLimit(), middleware.TurnstileCheck(), controller.Login)
+			userRoute.POST("/login/email", middleware.CriticalRateLimit(), middleware.TurnstileCheck(), controller.LoginByEmail)
 			userRoute.POST("/login/2fa", middleware.CriticalRateLimit(), controller.Verify2FALogin)
 			userRoute.POST("/passkey/login/begin", middleware.CriticalRateLimit(), controller.PasskeyLoginBegin)
 			userRoute.POST("/passkey/login/finish", middleware.CriticalRateLimit(), controller.PasskeyLoginFinish)
@@ -186,6 +201,7 @@ func SetApiRouter(router *gin.Engine) {
 			optionRoute.DELETE("/channel_affinity_cache", controller.ClearChannelAffinityCache)
 			optionRoute.POST("/rest_model_ratio", controller.ResetModelRatio)
 			optionRoute.POST("/migrate_console_setting", controller.MigrateConsoleSetting) // 用于迁移检测的旧键，下个版本会删除
+			optionRoute.POST("/test_email", controller.SendTestEmail)                      // 测试邮件发送
 		}
 
 		// Custom OAuth provider management (root only)
@@ -227,6 +243,7 @@ func SetApiRouter(router *gin.Engine) {
 			channelRoute.GET("/test", controller.TestAllChannels)
 			channelRoute.GET("/test/:id", controller.TestChannel)
 			channelRoute.GET("/update_balance", controller.UpdateAllChannelsBalance)
+			channelRoute.GET("/upstream_balance_summary", controller.GetUpstreamBalanceSummary)
 			channelRoute.GET("/update_balance/:id", controller.UpdateChannelBalance)
 			channelRoute.POST("/", controller.AddChannel)
 			channelRoute.PUT("/", controller.UpdateChannel)
@@ -306,6 +323,8 @@ func SetApiRouter(router *gin.Engine) {
 		dataRoute := apiRouter.Group("/data")
 		dataRoute.GET("/", middleware.AdminAuth(), controller.GetAllQuotaDates)
 		dataRoute.GET("/users", middleware.AdminAuth(), controller.GetQuotaDatesByUser)
+		dataRoute.GET("/self/all", middleware.UserAuth(), controller.GetAllUserQuotaDates)
+		dataRoute.GET("/self/year", middleware.UserAuth(), controller.GetCurrentYearUserQuotaDates)
 		dataRoute.GET("/self", middleware.UserAuth(), controller.GetUserQuotaDates)
 
 		logRoute.Use(middleware.CORS(), middleware.CriticalRateLimit())
@@ -353,6 +372,9 @@ func SetApiRouter(router *gin.Engine) {
 		{
 			modelsRoute.GET("/sync_upstream/preview", controller.SyncUpstreamPreview)
 			modelsRoute.POST("/sync_upstream", controller.SyncUpstreamModels)
+			modelsRoute.POST("/sync_from_pricing", controller.SyncPricingToModelMeta)
+			modelsRoute.POST("/recompute_prices", controller.RecomputeModelPrices)
+			modelsRoute.POST("/sync_upstream_pricing", controller.SyncSuperAIPricing)
 			modelsRoute.GET("/missing", controller.GetMissingModels)
 			modelsRoute.GET("/", controller.GetAllModelsMeta)
 			modelsRoute.GET("/search", controller.SearchModelsMeta)

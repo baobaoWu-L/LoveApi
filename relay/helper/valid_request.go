@@ -149,11 +149,16 @@ func GetAndValidOpenAIImageRequest(c *gin.Context, relayMode int) (*dto.ImageReq
 				return nil, fmt.Errorf("failed to parse image edit form request: %w", err)
 			}
 			formData := c.Request.PostForm
+			if len(formData) == 0 && c.Request.MultipartForm != nil {
+				formData = c.Request.MultipartForm.Value
+			}
 			imageRequest.Prompt = formData.Get("prompt")
 			imageRequest.Model = formData.Get("model")
 			imageRequest.N = common.GetPointer(uint(common.String2Int(formData.Get("n"))))
 			imageRequest.Quality = formData.Get("quality")
 			imageRequest.Size = formData.Get("size")
+			imageRequest.AspectRatio = formData.Get("aspect_ratio")
+			imageRequest.ResolutionTierValue = formData.Get("resolution_tier")
 			if imageValue := formData.Get("image"); imageValue != "" {
 				imageRequest.Image, _ = common.Marshal(imageValue)
 			}
@@ -186,10 +191,10 @@ func GetAndValidOpenAIImageRequest(c *gin.Context, relayMode int) (*dto.ImageReq
 			return nil, errors.New("model is required")
 		}
 
-		if strings.Contains(imageRequest.Size, "×") {
-			return nil, errors.New("size an unexpected error occurred in the parameter, please use 'x' instead of the multiplication sign '×'")
-		}
-
+		// Normalize common multiplication-sign and whitespace variants before
+		// applying provider-specific size validation.
+		imageRequest.Size = strings.TrimSpace(strings.ReplaceAll(imageRequest.Size, "×", "x"))
+		imageRequest.Size = strings.ReplaceAll(imageRequest.Size, " ", "")
 		// Not "256x256", "512x512", or "1024x1024"
 		if imageRequest.Model == "dall-e-2" || imageRequest.Model == "dall-e" {
 			if imageRequest.Size != "" && imageRequest.Size != "256x256" && imageRequest.Size != "512x512" && imageRequest.Size != "1024x1024" {
@@ -223,7 +228,53 @@ func GetAndValidOpenAIImageRequest(c *gin.Context, relayMode int) (*dto.ImageReq
 		}
 	}
 
+	// GPT Image 2's OpenAI-compatible endpoint uses an aspect-ratio token in
+	// `size` (for example `16:9`), while older clients commonly send the pixel
+	// dimensions shown in the UI. Normalize both forms before the request is
+	// handed to a channel so the provider does not silently default to 1:1.
+	normalizeGPTImage2Size(imageRequest)
+
 	return imageRequest, nil
+}
+
+func normalizeGPTImage2Size(request *dto.ImageRequest) {
+	if request == nil || !strings.EqualFold(strings.TrimSpace(request.Model), "gpt-image-2") {
+		return
+	}
+	if ratio := normalizeImageAspect(request.AspectRatio); ratio != "" {
+		request.Size = ratio
+		// The upstream GPT Image 2 contract documents the ratio in `size`.
+		// Do not send a second, provider-specific aspect_ratio field that may be
+		// rejected as an unknown parameter.
+		request.AspectRatio = ""
+		return
+	}
+	parts := strings.SplitN(strings.TrimSpace(request.Size), "x", 2)
+	if len(parts) != 2 {
+		return
+	}
+	known := map[string]string{
+		"1254x1254": "1:1", "1448x1086": "4:3", "1536x1024": "3:2",
+		"1086x1448": "3:4", "1024x1536": "2:3", "1672x941": "16:9",
+		"941x1672": "9:16", "1915x821": "21:9", "821x1915": "9:21",
+		"1402x1122": "5:4", "1122x1402": "4:5",
+	}
+	if ratio, ok := known[strings.ToLower(strings.TrimSpace(request.Size))]; ok {
+		request.Size = ratio
+		request.AspectRatio = ""
+	}
+}
+
+func normalizeImageAspect(value string) string {
+	value = strings.TrimSpace(strings.ReplaceAll(value, " ", ""))
+	allowed := map[string]struct{}{
+		"1:1": {}, "4:3": {}, "3:2": {}, "3:4": {}, "2:3": {},
+		"16:9": {}, "9:16": {}, "21:9": {}, "9:21": {}, "5:4": {}, "4:5": {},
+	}
+	if _, ok := allowed[value]; ok {
+		return value
+	}
+	return ""
 }
 
 func GetAndValidateClaudeRequest(c *gin.Context) (textRequest *dto.ClaudeRequest, err error) {

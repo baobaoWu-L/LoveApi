@@ -111,6 +111,10 @@ export interface LogOtherData {
     admin_id?: number | string
   }
   request_path?: string
+  seconds?: number | string
+  size?: string | number
+  aspect_ratio?: string
+  resolution_tier?: string
   request_conversion?: string[]
   ws?: boolean
   audio?: boolean
@@ -158,6 +162,25 @@ export interface LogOtherData {
   audio_input_price?: number
   image_generation_call?: boolean
   image_generation_call_price?: number
+  // 图片生成明细（由后端 image_billing_detail 写入，含分辨率档位/倍率/数量/单价等）
+  image_billing?: {
+    model?: string
+    size?: string
+    quality?: string
+    resolution_tier?: string
+    unit_price_usd?: number
+    requested_images?: number
+    quota_per_image?: number
+    estimated_quota?: number
+    group_multiplier?: number
+    multiplier_applied?: boolean
+    actual_quota?: number
+    actual_price_usd?: number
+    settled?: boolean
+    generated_image_url?: string
+  }
+  // 备用：生成结果链接（顶层），兼容不同版本日志
+  image_generated_url?: string
   is_system_prompt_overwritten?: boolean
   po?: string[]
   billing_source?: string

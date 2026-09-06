@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/QuantumNous/new-api/dto"
@@ -58,8 +59,11 @@ func (a *Adaptor) ConvertAudioRequest(c *gin.Context, info *relaycommon.RelayInf
 }
 
 func (a *Adaptor) ConvertImageRequest(c *gin.Context, info *relaycommon.RelayInfo, request dto.ImageRequest) (any, error) {
-	if !strings.HasPrefix(info.UpstreamModelName, "imagen") {
+	if !strings.HasPrefix(info.UpstreamModelName, "imagen") && !isCanvasGeminiImageModel(info.UpstreamModelName) {
 		return nil, errors.New("not supported model for image generation, only imagen models are supported")
+	}
+	if len(request.Images) > 0 {
+		return nil, errors.New("the selected Gemini image model does not support reference images on this channel")
 	}
 
 	// convert size to aspect ratio but allow user to specify aspect ratio
@@ -69,6 +73,9 @@ func (a *Adaptor) ConvertImageRequest(c *gin.Context, info *relaycommon.RelayInf
 		if strings.Contains(size, ":") {
 			aspectRatio = size
 		} else {
+			if width, height, ok := parseImageDimensions(size); ok {
+				aspectRatio = reduceImageAspectRatio(width, height)
+			}
 			switch size {
 			case "256x256", "512x512", "1024x1024":
 				aspectRatio = "1:1"
@@ -123,6 +130,35 @@ func (a *Adaptor) ConvertImageRequest(c *gin.Context, info *relaycommon.RelayInf
 	return geminiRequest, nil
 }
 
+func isCanvasGeminiImageModel(model string) bool {
+	model = strings.ToLower(strings.TrimSpace(model))
+	return model == "gemini-3-pro-image" || model == "gemini-3.1-flash-image"
+}
+
+func parseImageDimensions(size string) (int, int, bool) {
+	parts := strings.Split(strings.ToLower(strings.ReplaceAll(size, "×", "x")), "x")
+	if len(parts) != 2 {
+		return 0, 0, false
+	}
+	w, errW := strconv.Atoi(strings.TrimSpace(parts[0]))
+	h, errH := strconv.Atoi(strings.TrimSpace(parts[1]))
+	return w, h, errW == nil && errH == nil && w > 0 && h > 0
+}
+
+func reduceImageAspectRatio(width, height int) string {
+	gcd := func(a, b int) int {
+		for b != 0 {
+			a, b = b, a%b
+		}
+		return a
+	}
+	g := gcd(width, height)
+	if g <= 0 {
+		return "1:1"
+	}
+	return strconv.Itoa(width/g) + ":" + strconv.Itoa(height/g)
+}
+
 func (a *Adaptor) Init(info *relaycommon.RelayInfo) {
 
 }
@@ -146,7 +182,7 @@ func (a *Adaptor) GetRequestURL(info *relaycommon.RelayInfo) (string, error) {
 
 	version := model_setting.GetGeminiVersionSetting(info.UpstreamModelName)
 
-	if strings.HasPrefix(info.UpstreamModelName, "imagen") {
+	if strings.HasPrefix(info.UpstreamModelName, "imagen") || isCanvasGeminiImageModel(info.UpstreamModelName) {
 		return fmt.Sprintf("%s/%s/models/%s:predict", info.ChannelBaseUrl, version, info.UpstreamModelName), nil
 	}
 
@@ -259,7 +295,7 @@ func (a *Adaptor) DoResponse(c *gin.Context, resp *http.Response, info *relaycom
 		}
 	}
 
-	if strings.HasPrefix(info.UpstreamModelName, "imagen") {
+	if strings.HasPrefix(info.UpstreamModelName, "imagen") || isCanvasGeminiImageModel(info.UpstreamModelName) {
 		return GeminiImageHandler(c, info, resp)
 	}
 

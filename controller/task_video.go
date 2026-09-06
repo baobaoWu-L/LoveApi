@@ -118,7 +118,7 @@ func updateVideoSingleTask(ctx context.Context, adaptor channel.TaskAdaptor, cha
 
 	logger.LogDebug(ctx, fmt.Sprintf("UpdateVideoSingleTask taskResult: %+v", taskResult))
 
-	now := time.Now().Unix()
+	now := time.Now()
 	if taskResult.Status == "" {
 		//return fmt.Errorf("task %s status is empty", taskId)
 		taskResult = relaycommon.FailTaskInfo("upstream returned empty status")
@@ -137,12 +137,12 @@ func updateVideoSingleTask(ctx context.Context, adaptor channel.TaskAdaptor, cha
 		task.Progress = "20%"
 	case model.TaskStatusInProgress:
 		task.Progress = "30%"
-		if task.StartTime == 0 {
+		if task.StartTime.IsZero() {
 			task.StartTime = now
 		}
 	case model.TaskStatusSuccess:
 		task.Progress = "100%"
-		if task.FinishTime == 0 {
+		if task.FinishTime.IsZero() {
 			task.FinishTime = now
 		}
 		if !(len(taskResult.Url) > 5 && taskResult.Url[:5] == "data:") {
@@ -242,7 +242,7 @@ func updateVideoSingleTask(ctx context.Context, adaptor channel.TaskAdaptor, cha
 		logger.LogJson(ctx, fmt.Sprintf("Task %s failed", taskId), task)
 		task.Status = model.TaskStatusFailure
 		task.Progress = "100%"
-		if task.FinishTime == 0 {
+		if task.FinishTime.IsZero() {
 			task.FinishTime = now
 		}
 		task.FailReason = taskResult.Reason
@@ -283,6 +283,7 @@ func redactVideoResponseBody(body []byte) []byte {
 	if err := json.Unmarshal(body, &m); err != nil {
 		return body
 	}
+	redactTaskContent(m)
 	resp, _ := m["response"].(map[string]any)
 	if resp != nil {
 		delete(resp, "bytesBase64Encoded")
@@ -302,6 +303,30 @@ func redactVideoResponseBody(body []byte) []byte {
 		return body
 	}
 	return b
+}
+
+func redactTaskContent(value map[string]any) {
+	blocked := map[string]struct{}{
+		"prompt": {}, "prompt_en": {}, "messages": {}, "message": {},
+		"input": {}, "output": {}, "content": {}, "text": {},
+		"bytesBase64Encoded": {},
+	}
+	for key, item := range value {
+		if _, ok := blocked[key]; ok {
+			delete(value, key)
+			continue
+		}
+		switch nested := item.(type) {
+		case map[string]any:
+			redactTaskContent(nested)
+		case []any:
+			for _, entry := range nested {
+				if child, ok := entry.(map[string]any); ok {
+					redactTaskContent(child)
+				}
+			}
+		}
+	}
 }
 
 func truncateBase64(s string) string {

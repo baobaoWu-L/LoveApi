@@ -19,18 +19,27 @@ For commercial licensing, please contact support@quantumnous.com
 import { memo } from 'react'
 import { ChevronRight, Copy } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import { formatBillingCurrencyFromUSD } from '@/lib/currency'
 import { getLobeIcon } from '@/lib/lobe-icon'
 import { cn } from '@/lib/utils'
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard'
 import { StatusBadge } from '@/components/status-badge'
-import { DEFAULT_TOKEN_UNIT } from '../constants'
+import { DEFAULT_TOKEN_UNIT, FILTER_ALL } from '../constants'
 import {
   getDynamicDisplayGroupRatio,
+  getDynamicGroupRatio,
   getDynamicPricingSummary,
+  isDynamicPricingModel,
 } from '../lib/dynamic-price'
 import { parseTags } from '../lib/filters'
+import { getModelDescription } from '../lib/model-description'
 import { isTokenBasedModel } from '../lib/model-helpers'
-import { formatPrice, formatRequestPrice } from '../lib/price'
+import {
+  formatFixedPrice,
+  formatGroupPrice,
+  formatPrice,
+  formatRequestPrice,
+} from '../lib/price'
 import type { PricingModel, TokenUnit } from '../types'
 import { ModelPerfBadge, type ModelPerfBadgeData } from './model-perf-badge'
 
@@ -41,8 +50,20 @@ export interface ModelCardProps {
   usdExchangeRate?: number
   tokenUnit?: TokenUnit
   showRechargePrice?: boolean
+  groupFilter?: string
   perf?: ModelPerfBadgeData
 }
+
+const REQUEST_TIER_ORDER = [
+  'request',
+  '1k',
+  '2k',
+  '4k',
+  'input_image',
+  'input_video_second',
+  '480p_second',
+  '720p_second',
+]
 
 export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
   const { t } = useTranslation()
@@ -51,6 +72,10 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
   const priceRate = props.priceRate ?? 1
   const usdExchangeRate = props.usdExchangeRate ?? 1
   const showRechargePrice = props.showRechargePrice ?? false
+  const selectedGroup =
+    props.groupFilter && props.groupFilter !== FILTER_ALL
+      ? props.groupFilter
+      : undefined
   const isTokenBased = isTokenBasedModel(props.model)
   const tokenUnitLabel = tokenUnit === 'K' ? '1K' : '1M'
   const tags = parseTags(props.model.tags)
@@ -60,17 +85,24 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
     ? getLobeIcon(props.model.vendor_icon, 28)
     : null
   const initial = props.model.model_name?.charAt(0).toUpperCase() || '?'
-  const isDynamicPricing =
-    props.model.billing_mode === 'tiered_expr' &&
-    Boolean(props.model.billing_expr)
+  const isDynamicPricing = isDynamicPricingModel(props.model)
   const hasCachedPrice = isTokenBased && props.model.cache_ratio != null
+  const requestTierLabels: Record<string, string> = {
+    request: t('Per request'),
+    input_image: t('Input image'),
+    input_video_second: t('Input video / second'),
+    '480p_second': t('480p / second'),
+    '720p_second': t('720p / second'),
+  }
   const dynamicSummary = isDynamicPricing
     ? getDynamicPricingSummary(props.model, {
         tokenUnit,
         showRechargePrice,
         priceRate,
         usdExchangeRate,
-        groupRatioMultiplier: getDynamicDisplayGroupRatio(props.model),
+        groupRatioMultiplier: selectedGroup
+          ? getDynamicGroupRatio(props.model, selectedGroup)
+          : getDynamicDisplayGroupRatio(props.model),
       })
     : null
 
@@ -143,28 +175,50 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
                   <span className='text-muted-foreground whitespace-nowrap'>
                     {t('Input')}{' '}
                     <span className='text-foreground font-mono font-semibold'>
-                      {formatPrice(
-                        props.model,
-                        'input',
-                        tokenUnit,
-                        showRechargePrice,
-                        priceRate,
-                        usdExchangeRate
-                      )}
+                      {selectedGroup
+                        ? formatGroupPrice(
+                            props.model,
+                            selectedGroup,
+                            'input',
+                            tokenUnit,
+                            showRechargePrice,
+                            priceRate,
+                            usdExchangeRate,
+                            props.model.group_ratio || {}
+                          )
+                        : formatPrice(
+                            props.model,
+                            'input',
+                            tokenUnit,
+                            showRechargePrice,
+                            priceRate,
+                            usdExchangeRate
+                          )}
                     </span>
                     /{tokenUnitLabel}
                   </span>
                   <span className='text-muted-foreground whitespace-nowrap'>
                     {t('Output')}{' '}
                     <span className='text-foreground font-mono font-semibold'>
-                      {formatPrice(
-                        props.model,
-                        'output',
-                        tokenUnit,
-                        showRechargePrice,
-                        priceRate,
-                        usdExchangeRate
-                      )}
+                      {selectedGroup
+                        ? formatGroupPrice(
+                            props.model,
+                            selectedGroup,
+                            'output',
+                            tokenUnit,
+                            showRechargePrice,
+                            priceRate,
+                            usdExchangeRate,
+                            props.model.group_ratio || {}
+                          )
+                        : formatPrice(
+                            props.model,
+                            'output',
+                            tokenUnit,
+                            showRechargePrice,
+                            priceRate,
+                            usdExchangeRate
+                          )}
                     </span>
                     /{tokenUnitLabel}
                   </span>
@@ -172,27 +226,75 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
                     <span className='text-muted-foreground/60 whitespace-nowrap'>
                       {t('Cached')}{' '}
                       <span className='font-mono'>
-                        {formatPrice(
-                          props.model,
-                          'cache',
-                          tokenUnit,
-                          showRechargePrice,
-                          priceRate,
-                          usdExchangeRate
-                        )}
+                        {selectedGroup
+                          ? formatGroupPrice(
+                              props.model,
+                              selectedGroup,
+                              'cache',
+                              tokenUnit,
+                              showRechargePrice,
+                              priceRate,
+                              usdExchangeRate,
+                              props.model.group_ratio || {}
+                            )
+                          : formatPrice(
+                              props.model,
+                              'cache',
+                              tokenUnit,
+                              showRechargePrice,
+                              priceRate,
+                              usdExchangeRate
+                            )}
                       </span>
                     </span>
                   )}
                 </>
+              ) : props.model.request_pricing ? (
+                <span className='text-muted-foreground flex flex-wrap gap-x-2 gap-y-0.5'>
+                  {Object.entries(props.model.request_pricing)
+                    .sort(
+                      ([a], [b]) =>
+                        REQUEST_TIER_ORDER.indexOf(a) -
+                        REQUEST_TIER_ORDER.indexOf(b)
+                    )
+                    .map(([tier, price]) => (
+                      <span key={tier} className='whitespace-nowrap'>
+                        <span className='text-muted-foreground'>
+                          {requestTierLabels[tier] ?? tier.toUpperCase()}{' '}
+                        </span>
+                        <span className='text-foreground font-mono font-semibold'>
+                          {formatBillingCurrencyFromUSD(
+                            showRechargePrice
+                              ? (price * priceRate) / usdExchangeRate
+                              : price,
+                            {
+                              digitsLarge: 4,
+                              digitsSmall: 6,
+                              abbreviate: false,
+                            }
+                          )}
+                        </span>
+                      </span>
+                    ))}
+                </span>
               ) : (
                 <span className='text-muted-foreground whitespace-nowrap'>
                   <span className='text-foreground font-mono font-semibold'>
-                    {formatRequestPrice(
-                      props.model,
-                      showRechargePrice,
-                      priceRate,
-                      usdExchangeRate
-                    )}
+                    {selectedGroup
+                      ? formatFixedPrice(
+                          props.model,
+                          selectedGroup,
+                          showRechargePrice,
+                          priceRate,
+                          usdExchangeRate,
+                          props.model.group_ratio || {}
+                        )
+                      : formatRequestPrice(
+                          props.model,
+                          showRechargePrice,
+                          priceRate,
+                          usdExchangeRate
+                        )}
                   </span>{' '}
                   / {t('request')}
                 </span>
@@ -223,7 +325,7 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
 
       {/* Description */}
       <p className='text-muted-foreground mt-2 line-clamp-1 flex-1 text-[13px] leading-relaxed sm:mt-4 sm:line-clamp-2 sm:min-h-[2.5rem]'>
-        {props.model.description || t('No description available.')}
+        {getModelDescription(props.model, t)}
       </p>
 
       {/* Footer: left metadata and right performance summary share row alignment */}

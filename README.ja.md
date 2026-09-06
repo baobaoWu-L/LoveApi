@@ -1,8 +1,8 @@
 <div align="center">
 
-![new-api](/web/default/public/logo.png)
+![Love-api](/web/default/public/logo.png)
 
-# New API
+# Love API
 
 🍥 **次世代大規模モデルゲートウェイとAI資産管理システム**
 

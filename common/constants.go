@@ -14,7 +14,7 @@ import (
 
 var StartTime = time.Now().Unix() // unit: second
 var Version = "v0.0.0"            // this hard coding will be replaced automatically when building, no need to manually change
-var SystemName = "New API"
+var SystemName = "Love Api"
 var Footer = ""
 var Logo = ""
 var TopUpLink = ""
@@ -150,7 +150,9 @@ var AutomaticEnableChannelEnabled = false
 var QuotaRemindThreshold = 1000
 var PreConsumedQuota = 500
 
-var RetryTimes = 0
+// 渠道失败时自动重试次数：请求失败后尝试其它渠道，最多额外重试 RetryTimes 次，
+// 某渠道成功即返回结果，全部失败才向用户返回错误；切换渠道对用户无感知。
+var RetryTimes = 3
 
 //var RootUserEmail = ""
 

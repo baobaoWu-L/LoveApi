@@ -35,7 +35,13 @@ type Pricing struct {
 	SupportedEndpointTypes []constant.EndpointType `json:"supported_endpoint_types"`
 	BillingMode            string                  `json:"billing_mode,omitempty"`
 	BillingExpr            string                  `json:"billing_expr,omitempty"`
+	BillingModeByGroup     map[string]string       `json:"billing_mode_by_group,omitempty"`
+	BillingExprByGroup     map[string]string       `json:"billing_expr_by_group,omitempty"`
 	PricingVersion         string                  `json:"pricing_version,omitempty"`
+	// RequestPricing lists fixed per-request USD prices by request tier (for
+	// example image resolution). It is intentionally separate from
+	// ModelPrice, which remains the base/default request price.
+	RequestPricing map[string]float64 `json:"request_pricing,omitempty"`
 }
 
 type PricingVendor struct {
@@ -124,7 +130,13 @@ func updatePricing() {
 	for i := range allMeta {
 		m := &allMeta[i]
 		if m.NameRule == NameRuleExact {
-			metaMap[m.ModelName] = m
+			// Duplicate metadata rows can exist after imports. Prefer the row
+			// with explicit endpoint metadata so an empty duplicate cannot erase
+			// the model's real protocol declaration.
+			if current, exists := metaMap[m.ModelName]; !exists ||
+				(strings.TrimSpace(current.Endpoints) == "" && strings.TrimSpace(m.Endpoints) != "") {
+				metaMap[m.ModelName] = m
+			}
 		} else {
 			switch m.NameRule {
 			case NameRulePrefix:
@@ -214,7 +226,7 @@ func updatePricing() {
 		modelSupportEndpointsStr[ability.Model] = endpoints
 	}
 
-	// 再补充模型自定义端点：若配置有效则替换默认端点，不做合并
+	// 再补充模型自定义端点：若配置有效则替换默认端点，不做合并。
 	for modelName, meta := range metaMap {
 		if strings.TrimSpace(meta.Endpoints) == "" {
 			continue
@@ -236,6 +248,11 @@ func updatePricing() {
 		}
 	}
 
+	// Do not infer protocols from the model name. The list above is derived
+	// from the real channel adapter, while an explicit models.endpoints value
+	// is authoritative for that model. This prevents every model from being
+	// presented as supporting the same protocol.
+
 	modelSupportEndpointTypes = make(map[string][]constant.EndpointType)
 	for model, endpoints := range modelSupportEndpointsStr {
 		supportedEndpoints := make([]constant.EndpointType, 0)
@@ -245,7 +262,6 @@ func updatePricing() {
 		}
 		modelSupportEndpointTypes[model] = supportedEndpoints
 	}
-
 	// 构建全局 supportedEndpointMap（默认 + 自定义覆盖）
 	supportedEndpointMap = make(map[string]common.EndpointInfo)
 	// 1. 默认端点
@@ -287,32 +303,38 @@ func updatePricing() {
 
 	pricingMap = make([]Pricing, 0)
 	for model, groups := range modelGroupsMap {
+		meta, ok := metaMap[model]
+		if !ok || meta.Status != 1 {
+			continue
+		}
 		pricing := Pricing{
 			ModelName:              model,
 			EnableGroup:            groups.Items(),
 			SupportedEndpointTypes: modelSupportEndpointTypes[model],
 		}
-
-		// 补充模型元数据（描述、标签、供应商、状态）
-		if meta, ok := metaMap[model]; ok {
-			// 若模型被禁用(status!=1)，则直接跳过，不返回给前端
-			if meta.Status != 1 {
-				continue
-			}
-			pricing.Description = meta.Description
-			pricing.Icon = meta.Icon
-			pricing.Tags = meta.Tags
-			pricing.VendorID = meta.VendorID
+		if requestPricing := requestPricingForModel(model); len(requestPricing) > 0 {
+			pricing.RequestPricing = requestPricing
 		}
-		modelPrice, findPrice := ratio_setting.GetModelPrice(model, false)
-		if findPrice {
-			pricing.ModelPrice = modelPrice
+
+		// 模型主表是模型广场的来源；渠道能力只决定该模型是否可用。
+		pricing.Description = meta.Description
+		pricing.Icon = meta.Icon
+		pricing.Tags = meta.Tags
+		pricing.VendorID = meta.VendorID
+		if requestPrice, ok := RequestPriceUSD(model); ok {
+			pricing.ModelPrice = requestPrice
 			pricing.QuotaType = 1
 		} else {
-			modelRatio, _, _ := ratio_setting.GetModelRatio(model)
-			pricing.ModelRatio = modelRatio
-			pricing.CompletionRatio = ratio_setting.GetCompletionRatio(model)
-			pricing.QuotaType = 0
+			modelPrice, findPrice := ratio_setting.GetModelPrice(model, false)
+			if findPrice {
+				pricing.ModelPrice = modelPrice
+				pricing.QuotaType = 1
+			} else {
+				modelRatio, _, _ := ratio_setting.GetModelRatio(model)
+				pricing.ModelRatio = modelRatio
+				pricing.CompletionRatio = ratio_setting.GetCompletionRatio(model)
+				pricing.QuotaType = 0
+			}
 		}
 		if cacheRatio, ok := ratio_setting.GetCacheRatio(model); ok {
 			pricing.CacheRatio = &cacheRatio
@@ -336,6 +358,12 @@ func updatePricing() {
 				pricing.BillingMode = billingMode
 				pricing.BillingExpr = expr
 			}
+		}
+		if modes := billing_setting.GetBillingModeByGroupCopy()[model]; len(modes) > 0 {
+			pricing.BillingModeByGroup = modes
+		}
+		if exprs := billing_setting.GetBillingExprByGroupCopy()[model]; len(exprs) > 0 {
+			pricing.BillingExprByGroup = exprs
 		}
 		pricingMap = append(pricingMap, pricing)
 	}
