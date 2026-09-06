@@ -127,13 +127,15 @@ export function About() {
           <header data-reveal className='mb-8 border-b border-border/40 pb-6'>
             <span className='text-primary inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold tracking-wide uppercase'>
               <span className='size-1.5 rounded-full bg-current' />
-              About
+              {t('About')}
             </span>
             <h1 className='mt-3 text-4xl font-bold tracking-tight sm:text-5xl'>
               {t('About Love Api')}
             </h1>
             <p className='text-muted-foreground mt-3 max-w-2xl leading-relaxed'>
-              统一的大模型 API 网关，聚合多家上游供应商，提供稳定、高效、无缝的 API 转发体验。
+              {t(
+                'Unified AI API gateway aggregating multiple upstream providers to deliver a stable, efficient, seamless API forwarding experience.'
+              )}
             </p>
           </header>
 

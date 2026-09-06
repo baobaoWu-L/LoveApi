@@ -528,6 +528,9 @@ func getHardcodedCompletionModelRatio(name string) (float64, bool) {
 			// upstream price table. Keep this explicit instead of inheriting
 			// the generic GPT-5 fallback (8x), so the displayed and settled
 			// prices match the configured USD rates.
+			if strings.HasPrefix(name, "gpt-5.6-sol") {
+				return 3, true
+			}
 			if strings.HasPrefix(name, "gpt-5.6") {
 				return 6, true
 			}
