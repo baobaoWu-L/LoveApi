@@ -108,3 +108,83 @@ bun run typecheck  # tsc 类型检查
 bun run i18n:sync  # 同步 i18n 文案
 
 ========================================================================
+
+以后本地更新代码后，服务器执行
+cd /usr/src/itm/LoveApi
+# 进入项目目录
+
+git status --short
+# 查看服务器是否有本地修改
+
+git pull --ff-only origin LoveApi
+# 拉取 GitHub 的 LoveApi 分支，不强制覆盖本地文件
+
+git log -1 --oneline
+# 确认当前代码版本
+构建两个前端：
+cd /usr/src/itm/LoveApi/web/default
+# 进入 default 前端
+
+bun install
+# 安装前端依赖
+
+bun run build
+# 构建 default 前端
+
+cd /usr/src/itm/LoveApi/web/classic
+# 进入 classic 前端
+
+bun install
+# 安装前端依赖
+
+bun run build
+# 构建 classic 前端
+构建和替换后端：
+cd /usr/src/itm/LoveApi
+# 返回项目根目录
+
+go mod download
+# 下载 Go 依赖
+
+go build -o bin/love-api.new .
+# 编译临时后端程序
+
+test -x bin/love-api.new && echo backend-build-ok
+# 检查编译结果
+
+mv bin/love-api.new bin/love-api
+# 替换正式后端程序
+
+chmod +x bin/love-api
+# 确保后端有执行权限
+
+systemctl restart love-api
+# 重启后端服务
+
+systemctl status love-api --no-pager
+# 查看服务状态
+后端日志命令
+journalctl -u love-api -n 100 --no-pager
+# 查看最近 100 行后端日志
+journalctl -u love-api -f
+# 实时查看后端日志，按 Ctrl+C 退出
+journalctl -u love-api --since today --no-pager
+# 查看今天的全部后端日志
+journalctl -u love-api -p err..alert --since today --no-pager
+# 只查看今天的错误日志
+systemctl cat love-api
+# 查看当前 systemd 服务配置
+ss -lntp | grep ':3000'
+# 检查后端是否监听 3000 端口
+curl -sS -o /dev/null -w '%{http_code}\n' http://127.0.0.1:3000
+# 测试本机访问后端
+Nginx 日志命令
+systemctl status nginx --no-pager
+# 查看 Nginx 状态
+tail -f /var/log/nginx/error.log
+# 实时查看 Nginx 错误日志
+tail -f /var/log/nginx/access.log
+# 实时查看 Nginx 访问日志
+如果 git pull --ff-only 报本地文件有修改，不要使用 git reset --hard 或 git clean -fd，先执行：
+git status --short
+# 查看哪些文件阻止了更新

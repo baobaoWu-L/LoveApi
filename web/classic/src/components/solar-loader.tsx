@@ -108,7 +108,7 @@ export function SolarLoader() {
         <img
           src='/LoveApi.png'
           alt=''
-          className='solar-sun relative z-10 size-16 rounded-full object-cover shadow-md'
+          className='solar-sun relative z-10 size-16 object-contain shadow-md'
         />
       </div>
     </div>
