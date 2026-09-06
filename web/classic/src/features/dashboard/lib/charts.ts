@@ -27,6 +27,16 @@ import type {
 } from '@/features/dashboard/types'
 
 type TFunction = (key: string) => string
+
+// Normalize a raw timestamp (numeric seconds or RFC3339 string) to epoch
+// seconds, used for chart padding/bucketing when created_at may be a datetime.
+function toChartSec(value?: number | string): number {
+  if (typeof value === 'string') {
+    const ms = Date.parse(value)
+    return Number.isNaN(ms) ? 0 : Math.floor(ms / 1000)
+  }
+  return value || 0
+}
 type TooltipLineItem = {
   key: string
   value: string | number
@@ -254,7 +264,7 @@ export function processChartData(
   >()
 
   data.forEach((item) => {
-    const timestamp = Number(item.created_at)
+    const timestamp = item.created_at
     const timeKey = formatChartTime(timestamp, timeGranularity)
     const model = item.model_name || 'Unknown'
     const quota = Number(item.quota) || 0
@@ -308,7 +318,7 @@ export function processChartData(
   const fillTimePoints = (times: string[]) => {
     if (times.length >= MAX_TREND_POINTS) return times
     const lastTime = Math.max(
-      ...data.map((item) => Number(item.created_at) || 0)
+      ...data.map((item) => toChartSec(item.created_at))
     )
     const intervalSec =
       timeGranularity === 'week'
@@ -822,7 +832,7 @@ export function processUserChartData(
   const allTimePoints = new Set<string>()
 
   data.forEach((item) => {
-    const ts = Number(item.created_at)
+    const ts = toChartSec(item.created_at)
     const timeKey = formatChartTime(ts, timeGranularity)
     allTimePoints.add(timeKey)
     const user = item.username || 'unknown'

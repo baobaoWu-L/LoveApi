@@ -157,7 +157,7 @@ func PostSetup(c *gin.Context) {
 
 	setup := model.Setup{
 		Version:       common.Version,
-		InitializedAt: time.Now().Unix(),
+		InitializedAt: time.Now(),
 	}
 	err = model.DB.Create(&setup).Error
 	if err != nil {

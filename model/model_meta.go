@@ -2,8 +2,7 @@ package model
 
 import (
 	"strconv"
-
-	"github.com/QuantumNous/new-api/common"
+	"time"
 
 	"gorm.io/gorm"
 )
@@ -30,8 +29,8 @@ type Model struct {
 	Endpoints    string         `json:"endpoints,omitempty" gorm:"type:text"`
 	Status       int            `json:"status" gorm:"default:1"`
 	SyncOfficial int            `json:"sync_official" gorm:"default:1"`
-	CreatedTime  int64          `json:"created_time" gorm:"bigint"`
-	UpdatedTime  int64          `json:"updated_time" gorm:"bigint"`
+	CreatedTime  time.Time `json:"created_time" gorm:"column:created_time"`
+	UpdatedTime  time.Time `json:"updated_time" gorm:"column:updated_time"`
 	DeletedAt    gorm.DeletedAt `json:"-" gorm:"index;uniqueIndex:uk_model_name_delete_at,priority:2"`
 
 	BoundChannels []BoundChannel `json:"bound_channels,omitempty" gorm:"-"`
@@ -44,7 +43,7 @@ type Model struct {
 }
 
 func (mi *Model) Insert() error {
-	now := common.GetTimestamp()
+	now := time.Now()
 	mi.CreatedTime = now
 	mi.UpdatedTime = now
 
@@ -74,7 +73,7 @@ func IsModelNameDuplicated(id int, name string) (bool, error) {
 }
 
 func (mi *Model) Update() error {
-	mi.UpdatedTime = common.GetTimestamp()
+	mi.UpdatedTime = time.Now()
 	// 使用 Select 强制更新所有字段，包括零值
 	return DB.Model(&Model{}).Where("id = ?", mi.Id).
 		Select("model_name", "description", "icon", "tags", "vendor_id", "endpoints", "status", "sync_official", "name_rule", "updated_time").
@@ -167,7 +166,7 @@ func SyncPricingToModelMeta() (int, error) {
 		vendorMap[v.Name] = v.ID
 	}
 
-	now := common.GetTimestamp()
+	now := time.Now()
 	added := 0
 	for _, name := range pricingNames {
 		if _, ok := existingSet[name]; ok {

@@ -19,7 +19,6 @@ For commercial licensing, please contact support@quantumnous.com
 import { useRef, useEffect, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { usePricingData } from '@/features/pricing/hooks/use-pricing-data'
-import { useReducedMotion } from 'motion/react'
 
 interface CounterProps {
   end: number

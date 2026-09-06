@@ -1,5 +1,8 @@
 {
   "translation": {
+    "360": "360",
+    "1000": "1000",
+    "10000": "10000",
     "Execution Mode": "Execution Mode",
     "Synchronous": "Synchronous",
     "Image Generation Details": "Image Generation Details",
@@ -11,10 +14,6 @@
     "Reference only": "Reference only, actual billing may differ",
     "Generated Image": "Generated Image",
     "Generated Image Link": "Generated Image Link",
-
-    "360": "360",
-    "1000": "1000",
-    "10000": "10000",
     "_copy": "_copy",
     "，": ", ",
     ", and": ", and",
@@ -4741,6 +4740,32 @@
     "Zero retention": "Zero retention",
     "Zhipu": "Zhipu",
     "Zhipu V4": "Zhipu V4",
-    "Zoom": "Zoom"
+    "Zoom": "Zoom",
+    "OpenAI / compatible": "OpenAI / compatible",
+    "Set to responses for the Codex / ChatGPT protocol": "Set to responses for the Codex / ChatGPT protocol",
+    "One-click import Codex": "One-click import Codex",
+    "One-click import Claude Code": "One-click import Claude Code",
+    "One-click import Love API as a Codex provider via CC Switch": "One-click import Love API as a Codex provider via CC Switch",
+    "One-click import Love API as a Claude Code provider via CC Switch": "One-click import Love API as a Claude Code provider via CC Switch",
+    "for app=claude the endpoint uses the server address": "for app=claude the endpoint uses the server address",
+    "The deep link carries the full config; you do not need to copy a config file separately, and whichever model you pick is the one actually called.": "The deep link carries the full config; you do not need to copy a config file separately, and whichever model you pick is the one actually called.",
+    "Reference (codex config.toml)": "Reference (codex config.toml)",
+    "Reference (claude settings.json)": "Reference (claude settings.json)",
+    "If your CC Switch version does not auto-apply the extraConfig, copy the full config below to": "If your CC Switch version does not auto-apply the extraConfig, copy the full config below to",
+    "Codex (ChatGPT) integration note": "Codex (ChatGPT) integration note",
+    "To use the same model ({{model}}) for the main conversation and subagents, write the following to": "To use the same model ({{model}}) for the main conversation and subagents, write the following to",
+    "Replace every {{model}} above with your chosen model name; model, review_model, default_subagent_model, and profiles.loveapi.model must match.": "Replace every {{model}} above with your chosen model name; model, review_model, default_subagent_model, and profiles.loveapi.model must match.",
+    "No per-model rate limits are published. Token and user-level limits still apply.": "No per-model rate limits are published. Token and user-level limits still apply.",
+    "Token Usage Heatmap": "Token Usage Heatmap",
+    "Token Usage": "Token Usage",
+    "Darker squares mean more tokens used": "Darker squares mean more tokens used",
+    "No usage": "No usage",
+    "12 months": "12 months",
+    "{{count}} tokens": "{{count}} tokens",
+    "Mon": "Mon",
+    "Wed": "Wed",
+    "Fri": "Fri",
+    "Hover a day to see token usage": "Hover a day to see token usage",
+    "Request Path": "Request Path"
   }
 }

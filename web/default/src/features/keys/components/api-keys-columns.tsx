@@ -272,8 +272,11 @@ export function useApiKeysColumns(): ColumnDef<ApiKey>[] {
         <DataTableColumnHeader column={column} title={t('Last Used')} />
       ),
       cell: ({ row }) => {
-        const accessedTime = row.getValue('accessed_time') as number
-        if (!accessedTime) {
+        const accessedTime = row.getValue('accessed_time') as
+          | number
+          | string
+          | null
+        if (accessedTime == null || accessedTime === 0 || accessedTime === '') {
           return <span className='text-muted-foreground text-xs'>-</span>
         }
         return (
@@ -290,8 +293,11 @@ export function useApiKeysColumns(): ColumnDef<ApiKey>[] {
         <DataTableColumnHeader column={column} title={t('Expires')} />
       ),
       cell: ({ row }) => {
-        const expiredTime = row.getValue('expired_time') as number
-        if (expiredTime === -1) {
+        const expiredTime = row.getValue('expired_time') as
+          | number
+          | string
+          | null
+        if (expiredTime == null || expiredTime === 0 || expiredTime === '') {
           return (
             <StatusBadge
               label={t('Never')}
@@ -300,7 +306,10 @@ export function useApiKeysColumns(): ColumnDef<ApiKey>[] {
             />
           )
         }
-        const isExpired = expiredTime * 1000 < Date.now()
+        const isExpired =
+          typeof expiredTime === 'string'
+            ? Date.parse(expiredTime) < Date.now()
+            : expiredTime * 1000 < Date.now()
         return (
           <span
             className={cn(

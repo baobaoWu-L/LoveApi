@@ -27,6 +27,7 @@ import {
   Zap,
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import { useStatus } from '@/hooks/use-status'
 import type { BundledLanguage } from 'shiki/bundle/web'
 import { cn } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
@@ -581,18 +582,10 @@ function buildSample(
 // cc-switch 供应商配置（开源切换器）：本质是切换不同供应商配置。
 // 切换供应商时会把该配置写入要生效的 CLI 配置文件（Claude Code / Codex 等）。
 // api = 本项目端点地址；key = 本项目接口密钥；model = 当前模型；remark 说明连接自己的后台。
-// 返回「供应商 JSON + Codex 完整 config.toml」，一次粘贴即可，避免用户二次复制。
+// 返回「一键接入 Codex + 一键接入 Claude Code」，每段 = 编码完整 config 的 ccswitch URL + 完整配置参考块。
+// 保证「用户选的哪个模型，真实调用的就是哪个模型」，避免二次手动粘贴。
 function buildCcSwitchSample(ctx: SampleContext): string {
   const m = ctx.modelName || 'gpt-5.6-sol'
-  const providerJson = [
-    '{',
-    `  "name": "LoveApi-${m}",`,
-    `  "api": "${ctx.baseUrl}",`,
-    `  "key": "<YOUR_API_KEY>",`,
-    `  "model": "${m}",`,
-    `  "remark": "连接自己的后台 (LoveApi)，切换后写入 Claude Code / Codex 等配置文件"`,
-    '}',
-  ].join('\n')
 
   const codexToml = [
     `model = "${m}"`,
@@ -614,12 +607,51 @@ function buildCcSwitchSample(ctx: SampleContext): string {
     `model_provider = "loveapi"`,
   ].join('\n')
 
+  const claudeSettings = JSON.stringify(
+    {
+      env: {
+        ANTHROPIC_BASE_URL: ctx.baseUrl,
+        ANTHROPIC_AUTH_TOKEN: '<YOUR_API_KEY>',
+        ANTHROPIC_MODEL: m,
+        ANTHROPIC_SMALL_FAST_MODEL: m,
+      },
+    },
+    null,
+    2
+  )
+
+  const codexCcsUrl = [
+    `ccswitch://v1/import?resource=provider&app=codex&name=LoveApi`,
+    `endpoint=${ctx.baseUrl}/v1`,
+    `apiKey=<YOUR_API_KEY>`,
+    `model=${m}`,
+    `homepage=${ctx.baseUrl}`,
+    `enabled=true`,
+    `extraConfig=${encodeURIComponent(codexToml)}`,
+  ].join('&')
+
+  const claudeCcsUrl = [
+    `ccswitch://v1/import?resource=provider&app=claude&name=LoveApi`,
+    `endpoint=${ctx.baseUrl}`,
+    `apiKey=<YOUR_API_KEY>`,
+    `model=${m}`,
+    `homepage=${ctx.baseUrl}`,
+    `enabled=true`,
+    `extraConfig=${encodeURIComponent(claudeSettings)}`,
+  ].join('&')
+
   return [
-    `# ① 供应商配置（粘贴到 cc-switch）`,
-    providerJson,
+    `# ① 一键接入 Codex（endpoint 需带 /v1）`,
+    codexCcsUrl,
     ``,
-    `# ② Codex 完整配置（粘贴到 ~/.codex/config.toml，用 codex -p loveapi 启动）`,
+    `# ② Codex 完整配置参考（粘贴到 ~/.codex/config.toml，用 codex -p loveapi 启动）`,
     codexToml,
+    ``,
+    `# ③ 一键接入 Claude Code（endpoint 不带 /v1）`,
+    claudeCcsUrl,
+    ``,
+    `# ④ Claude Code 完整配置参考（粘贴到 ~/.claude/settings.json）`,
+    claudeSettings,
   ].join('\n')
 }
 
@@ -630,6 +662,7 @@ function buildCcSwitchSample(ctx: SampleContext): string {
 // Codex（ChatGPT 桌面端 / CLI）接入提示：主对话与子代理默认可能用不同模型。
 // 想让主对话 + 子模型都用同一个模型，就把下面配置写入 ~/.codex/config.toml 并用 codex -p loveapi 启动。
 function CodexSubagentNote(props: { modelName: string }) {
+  const { t } = useTranslation()
   const m = props.modelName || 'gpt-5.6-sol'
   const cfg = [
     `model = "${m}"`,
@@ -643,21 +676,21 @@ function CodexSubagentNote(props: { modelName: string }) {
   ].join('\n')
   return (
     <div className='mt-3 rounded-lg border border-rose-300/70 bg-rose-50/70 p-3 text-xs leading-relaxed text-rose-700 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-300'>
-      <strong>⚠️ Codex（ChatGPT）接入注意：</strong>不加下面锁定配置时，<em>主对话</em>用的是你选择的模型，
-      但 Codex 的 agent 运行时会调用<em>子模型</em>，可能命中其它模型（具体情况请看 控制台 → 使用日志）。
-      想让主对话与子模型都用同一个模型（{m}），把下面这段配置写入{' '}
+      <strong> {t('Codex (ChatGPT) integration note')}:</strong>{' '}
+      {t('Without the lock settings below, the main conversation uses your selected model, but Codex agents may call a different submodel. Check Console → Usage logs for details.')}
+      <br />
+      {t('To use the same model ({{model}}) for the main conversation and subagents, write the following to', { model: m })}{' '}
       <code className='bg-muted rounded px-1 py-0.5 font-mono text-[10px]'>~/.codex/config.toml</code>{' '}
-      ，并用{' '}
-      <code className='bg-muted rounded px-1 py-0.5 font-mono text-[10px]'>codex -p loveapi</code>{' '}
-      启动：
+      {t('and start with')}{' '}
+      <code className='bg-muted rounded px-1 py-0.5 font-mono text-[10px]'>codex -p loveapi</code>:
       <pre className='mt-2 overflow-x-auto rounded-md bg-rose-50 p-2 font-mono text-[11px] leading-relaxed text-rose-800 dark:bg-rose-950/40 dark:text-rose-100'>
 {cfg}
       </pre>
       <p className='text-rose-700/90 mt-2 dark:text-rose-300/90'>
-        可修改的地方：把上面的 {m} 全部替换成你选定的模型名即可（model、review_model、default_subagent_model、profiles.loveapi.model 四处要一致）。
+        {t('Replace every {{model}} above with your chosen model name; model, review_model, default_subagent_model, and profiles.loveapi.model must match.', { model: m })}
       </p>
       <p className='text-rose-700/90 mt-2 dark:text-rose-300/90'>
-        扣费按实际调用的模型价格结算：选择高级模型不会按高级价格去扣低级模型的额度；调用哪个模型就按哪个模型的额度扣，请放心。
+        {t('Billing uses the price of the model actually called; each request consumes the matching model quota.')}
       </p>
     </div>
   )
@@ -672,9 +705,12 @@ function CodeSamplesSection(props: {
   endpointMap: Record<string, { path?: string; method?: string }>
 }) {
   const { t } = useTranslation()
+  const { status } = useStatus()
 
   // 中转站对外地址：管理端可能运行在 localhost，不能把管理端地址当 API 地址。
-  const baseUrl = 'https://api.LoveFulfiller.cn'
+  const baseUrl =
+    (status?.server_address as string) ||
+    (typeof window !== 'undefined' ? window.location.origin : '')
 
   const endpoints = useMemo(() => {
     // 按后端 supported_endpoint_types 真实展示协议，并附 ccswitch 一键接入项
@@ -755,7 +791,7 @@ function CodeSamplesSection(props: {
 
       {activeEndpoint.type === 'openai' && (
         <p className='mt-2 rounded-md border border-sky-300/70 bg-sky-50/70 p-2.5 text-xs leading-relaxed text-sky-700 dark:border-sky-500/30 dark:bg-sky-500/10 dark:text-sky-300'>
-          ℹ️ 该模型走 <strong>OpenAI 兼容协议</strong>（{' '}
+          ℹ 该模型走 <strong>OpenAI 兼容协议</strong>（{' '}
           <code className='bg-muted rounded px-1 py-0.5 font-mono text-[10px]'>
             {activeEndpoint.path}
           </code>{' '}

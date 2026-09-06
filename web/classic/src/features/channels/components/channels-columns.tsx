@@ -1012,10 +1012,14 @@ export function useChannelsColumns(): ColumnDef<Channel>[] {
         <DataTableColumnHeader column={column} title={t('Last Tested')} />
       ),
       cell: ({ row }) => {
-        const testTime = row.getValue('test_time') as number
+        const testTime = row.getValue('test_time') as
+          | number
+          | string
+          | null
+          | undefined
 
         // For invalid timestamps, show "Never" badge
-        if (!testTime || testTime === 0) {
+        if (testTime == null || testTime === 0 || testTime === '') {
           return <span className='text-muted-foreground text-xs'>-</span>
         }
 

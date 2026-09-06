@@ -283,11 +283,22 @@ func SendEmailVerification(c *gin.Context) {
 	}
 	code := common.GenerateVerificationCode(6)
 	common.RegisterVerificationCodeWithKey(email, code, common.EmailVerificationPurpose)
-	subject := fmt.Sprintf("%s邮箱验证邮件", common.SystemName)
-	content := fmt.Sprintf("<p>您好，你正在进行%s邮箱验证。</p>"+
-		"<p>您的验证码为: <strong>%s</strong></p>"+
-		"<p>验证码 %d 分钟内有效，如果不是本人操作，请忽略。</p>", common.SystemName, code, common.VerificationValidMinutes)
-	err := common.SendEmail(subject, email, content)
+	subject := "LoveApi - Email Verification"
+	// 通过 type 参数区分场景：register=注册验证码（默认），login=登录验证码
+	verifyType := c.Query("type")
+	desc := "You are registering a LoveApi account."
+	if verifyType == "login" {
+		desc = "You are logging in to your LoveApi account."
+	}
+	content := fmt.Sprintf(`<div style="text-align:center;font-family:Arial,Helvetica,sans-serif;padding:20px;">
+  <h2 style="color:#333;margin-bottom:20px;">LoveApi</h2>
+  <p style="font-size:16px;color:#666;">Here is your verification code:</p>
+  <p style="font-size:28px;font-weight:bold;letter-spacing:5px;color:#ff6b9d;margin:20px 0;">%s</p>
+  <p style="font-size:14px;color:#666;line-height:1.6;">%s Please do not forward or share this code with anyone, as it may lead to account theft.</p>
+  <p style="font-size:14px;color:#999;">This code is valid for %d minutes. If you did not request it, please ignore this email.</p>
+  <img src="cid:loveapilogo" alt="LoveApi" style="width:220px;height:auto;margin:24px auto 0;display:block;"/>
+</div>`, code, desc, common.VerificationValidMinutes)
+	err := common.SendEmailWithAttachment(subject, email, content, "/app/loveapi-logo.png")
 	if err != nil {
 		common.ApiError(c, err)
 		return
@@ -363,4 +374,54 @@ func ResetPassword(c *gin.Context) {
 		"data":    password,
 	})
 	return
+}
+
+// SendTestEmail 发送测试邮件
+func SendTestEmail(c *gin.Context) {
+	type TestEmailRequest struct {
+		Email string `json:"email"`
+	}
+	var req TestEmailRequest
+	err := common.DecodeJson(c.Request.Body, &req)
+	if err != nil || req.Email == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"message": "无效的参数",
+		})
+		return
+	}
+
+	// 验证邮箱格式
+	if err := common.Validate.Var(req.Email, "required,email"); err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"success": false,
+			"message": "无效的邮箱地址",
+		})
+		return
+	}
+
+	// 构建测试邮件内容
+	subject := fmt.Sprintf("%s - 邮件测试", common.SystemName)
+	content := fmt.Sprintf(`<div style="text-align:center;font-family:Arial,Helvetica,sans-serif;padding:20px;">
+  <img src="cid:loveapilogo" alt="%s" style="max-width:200px;margin:8px auto;display:block;"/>
+  <h2>%s</h2>
+  <p style="font-size:16px;color:#333;">这是一封测试邮件</p>
+  <p style="font-size:14px;color:#666;">如果您收到这封邮件，说明邮件服务配置成功！</p>
+  <p style="font-size:12px;color:#999;margin-top:20px;">发送时间: %s</p>
+</div>`, common.SystemName, common.SystemName, common.GetTimeString())
+
+	// 发送邮件（带内嵌图片）
+	err = common.SendEmailWithAttachment(subject, req.Email, content, "/app/loveapi-logo.png")
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"success": false,
+			"message": fmt.Sprintf("邮件发送失败: %s", err.Error()),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "测试邮件已发送，请检查收件箱",
+	})
 }

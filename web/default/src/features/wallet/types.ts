@@ -274,9 +274,9 @@ export interface TopupRecord {
   /** Payment method type */
   payment_method: string
   /** Creation timestamp */
-  create_time: number
+  create_time: number | string
   /** Completion timestamp */
-  complete_time?: number
+  complete_time?: number | string | null
   /** Payment status */
   status: TopupStatus
 }

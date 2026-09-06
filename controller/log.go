@@ -182,13 +182,8 @@ func sanitizeLogsForClient(logs []*model.Log) {
 		log.UpstreamRequestId = ""
 		log.ChannelId = 0
 		log.ChannelName = ""
-		// Other 中的上游重试链路与计费来源（上游返回/Local 标记）不外泄。
-		if otherMap, err := common.StrToMap(log.Other); err == nil && len(otherMap) > 0 {
-			if adminInfo, ok := otherMap["admin_info"].(map[string]interface{}); ok {
-				delete(adminInfo, "use_channel")
-				delete(adminInfo, "local_count_tokens")
-			}
-			log.Other = common.MapToJsonStr(otherMap)
-		}
+		// Also sanitize records written before the provider-metadata denylist
+		// existed. This keeps old logs subject to the same client contract.
+		log.Other = model.SanitizeLogOtherForClient(log.Other)
 	}
 }

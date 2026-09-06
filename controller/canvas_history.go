@@ -182,7 +182,7 @@ func SaveCanvasHistory(c *gin.Context) {
 			row = *model.NewCanvasHistory(userID, id, string(payload))
 		} else {
 			row.Payload = string(payload)
-			row.UpdatedAt = time.Now().UnixMilli()
+			row.UpdatedAt = time.Now()
 		}
 		row.UserID = userID
 		row.ImageID = id

@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/dto"
@@ -78,6 +79,60 @@ func Login(c *gin.Context) {
 			return
 		}
 
+		c.JSON(http.StatusOK, gin.H{
+			"message": i18n.T(c, i18n.MsgUserRequire2FA),
+			"success": true,
+			"data": map[string]interface{}{
+				"require_2fa": true,
+			},
+		})
+		return
+	}
+
+	setupLogin(&user, c)
+}
+
+type EmailLoginRequest struct {
+	Email string `json:"email"`
+	Code  string `json:"code"`
+}
+
+// LoginByEmail 邮箱验证码登录
+func LoginByEmail(c *gin.Context) {
+	if !common.PasswordLoginEnabled {
+		common.ApiErrorI18n(c, i18n.MsgUserPasswordLoginDisabled)
+		return
+	}
+	var req EmailLoginRequest
+	if err := common.DecodeJson(c.Request.Body, &req); err != nil {
+		common.ApiErrorI18n(c, i18n.MsgInvalidParams)
+		return
+	}
+	if req.Email == "" || req.Code == "" {
+		common.ApiErrorI18n(c, i18n.MsgInvalidParams)
+		return
+	}
+	if !common.VerifyCodeWithKey(req.Email, req.Code, common.EmailVerificationPurpose) {
+		common.ApiErrorI18n(c, i18n.MsgUserVerificationCodeError)
+		return
+	}
+
+	user := model.User{Email: req.Email}
+	err := user.FillUserByEmail()
+	if err != nil || user.Id == 0 {
+		common.ApiErrorI18n(c, i18n.MsgUserNotExists)
+		return
+	}
+
+	// 检查是否启用2FA
+	if model.IsTwoFAEnabled(user.Id) {
+		session := sessions.Default(c)
+		session.Set("pending_username", user.Username)
+		session.Set("pending_user_id", user.Id)
+		if err := session.Save(); err != nil {
+			common.ApiErrorI18n(c, i18n.MsgUserSessionSaveFailed)
+			return
+		}
 		c.JSON(http.StatusOK, gin.H{
 			"message": i18n.T(c, i18n.MsgUserRequire2FA),
 			"success": true,
@@ -219,9 +274,9 @@ func Register(c *gin.Context) {
 			UserId:             insertedUser.Id, // 使用插入后的用户ID
 			Name:               cleanUser.Username + "的初始令牌",
 			Key:                key,
-			CreatedTime:        common.GetTimestamp(),
-			AccessedTime:       common.GetTimestamp(),
-			ExpiredTime:        -1,     // 永不过期
+			CreatedTime:        time.Now(),
+			AccessedTime:       time.Now(),
+			ExpiredTime:        nil,     // 永不过期
 			RemainQuota:        500000, // 示例额度
 			UnlimitedQuota:     true,
 			ModelLimitsEnabled: false,

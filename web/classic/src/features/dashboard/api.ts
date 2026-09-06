@@ -46,6 +46,45 @@ export async function getUserQuotaDates(
   return res.data
 }
 
+// Get all quota data from the beginning of the database history to now.
+// Self-service users use a dedicated endpoint so the bounded monthly endpoint
+// remains available for the heatmap request.
+export async function getAllUserQuotaDates(
+  params: { username?: string } = {},
+  isAdmin = false
+) {
+  const endpoint = isAdmin ? '/api/data' : '/api/data/self/all'
+  const res = await api.get<{ success: boolean; data: QuotaDataItem[] }>(
+    endpoint,
+    {
+      params: {
+        start_timestamp: 0,
+        end_timestamp: Math.floor(Date.now() / 1000),
+        ...params,
+      },
+    }
+  )
+  return res.data
+}
+
+// Get quota data for the current calendar year for the heatmap.
+// This request stays independent from the dashboard chart filters.
+export async function getCurrentYearQuotaDates(isAdmin = false) {
+  const endpoint = isAdmin ? '/api/data' : '/api/data/self/year'
+  const now = new Date()
+  const start = new Date(now.getFullYear(), 0, 1)
+  const res = await api.get<{ success: boolean; data: QuotaDataItem[] }>(
+    endpoint,
+    {
+      params: {
+        start_timestamp: Math.floor(start.getTime() / 1000),
+        end_timestamp: Math.floor(now.getTime() / 1000),
+      },
+    }
+  )
+  return res.data
+}
+
 // ----------------------------------------------------------------------------
 // System Monitoring
 // ----------------------------------------------------------------------------

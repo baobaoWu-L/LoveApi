@@ -3,8 +3,7 @@ package model
 import (
 	"database/sql/driver"
 	"encoding/json"
-
-	"github.com/QuantumNous/new-api/common"
+	"time"
 
 	"gorm.io/gorm"
 )
@@ -79,14 +78,14 @@ type PrefillGroup struct {
 	Type        string         `json:"type" gorm:"size:32;index;not null"`
 	Items       JSONValue      `json:"items" gorm:"type:json"`
 	Description string         `json:"description,omitempty" gorm:"type:varchar(255)"`
-	CreatedTime int64          `json:"created_time" gorm:"bigint"`
-	UpdatedTime int64          `json:"updated_time" gorm:"bigint"`
+	CreatedTime time.Time `json:"created_time" gorm:"column:created_time"`
+	UpdatedTime time.Time `json:"updated_time" gorm:"column:updated_time"`
 	DeletedAt   gorm.DeletedAt `json:"-" gorm:"index"`
 }
 
 // Insert 新建组
 func (g *PrefillGroup) Insert() error {
-	now := common.GetTimestamp()
+	now := time.Now()
 	g.CreatedTime = now
 	g.UpdatedTime = now
 	return DB.Create(g).Error
@@ -104,7 +103,7 @@ func IsPrefillGroupNameDuplicated(id int, name string) (bool, error) {
 
 // Update 更新组
 func (g *PrefillGroup) Update() error {
-	g.UpdatedTime = common.GetTimestamp()
+	g.UpdatedTime = time.Now()
 	return DB.Save(g).Error
 }
 

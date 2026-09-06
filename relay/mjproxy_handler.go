@@ -110,9 +110,9 @@ func RelayMidjourneyNotify(c *gin.Context) *dto.MidjourneyResponse {
 	midjourneyTask.Progress = midjRequest.Progress
 	midjourneyTask.PromptEn = midjRequest.PromptEn
 	midjourneyTask.State = midjRequest.State
-	midjourneyTask.SubmitTime = midjRequest.SubmitTime
-	midjourneyTask.StartTime = midjRequest.StartTime
-	midjourneyTask.FinishTime = midjRequest.FinishTime
+	midjourneyTask.SubmitTime = model.MsToTime(midjRequest.SubmitTime)
+	midjourneyTask.StartTime = model.MsToTime(midjRequest.StartTime)
+	midjourneyTask.FinishTime = model.MsToTime(midjRequest.FinishTime)
 	midjourneyTask.ImageUrl = midjRequest.ImageUrl
 	midjourneyTask.VideoUrl = midjRequest.VideoUrl
 	videoUrlsStr, _ := json.Marshal(midjRequest.VideoUrls)
@@ -135,9 +135,9 @@ func coverMidjourneyTaskDto(c *gin.Context, originTask *model.Midjourney) (midjo
 	midjourneyTask.Progress = originTask.Progress
 	midjourneyTask.PromptEn = originTask.PromptEn
 	midjourneyTask.State = originTask.State
-	midjourneyTask.SubmitTime = originTask.SubmitTime
-	midjourneyTask.StartTime = originTask.StartTime
-	midjourneyTask.FinishTime = originTask.FinishTime
+	midjourneyTask.SubmitTime = originTask.SubmitTimeMs()
+	midjourneyTask.StartTime = originTask.StartTimeMs()
+	midjourneyTask.FinishTime = originTask.FinishTimeMs()
 	midjourneyTask.ImageUrl = ""
 	if originTask.ImageUrl != "" && setting.MjForwardUrlEnabled {
 		midjourneyTask.ImageUrl = system_setting.ServerAddress + "/mj/image/" + originTask.MjId
@@ -256,9 +256,9 @@ func RelaySwapFace(c *gin.Context, info *relaycommon.RelayInfo) *dto.MidjourneyR
 		PromptEn:    "",
 		Description: midjResponse.Description,
 		State:       "",
-		SubmitTime:  info.StartTime.UnixNano() / int64(time.Millisecond),
-		StartTime:   time.Now().UnixNano() / int64(time.Millisecond),
-		FinishTime:  0,
+		SubmitTime:  info.StartTime,
+		StartTime:   time.Now(),
+		FinishTime:  time.Time{},
 		ImageUrl:    "",
 		Status:      "",
 		Progress:    "0%",
@@ -569,9 +569,9 @@ func RelayMidjourneySubmit(c *gin.Context, relayInfo *relaycommon.RelayInfo) *dt
 		PromptEn:    "",
 		Description: midjResponse.Description,
 		State:       "",
-		SubmitTime:  time.Now().UnixNano() / int64(time.Millisecond),
-		StartTime:   0,
-		FinishTime:  0,
+		SubmitTime:  time.Now(),
+		StartTime:   time.Time{},
+		FinishTime:  time.Time{},
 		ImageUrl:    "",
 		Status:      "",
 		Progress:    "0%",
@@ -606,8 +606,8 @@ func RelayMidjourneySubmit(c *gin.Context, relayInfo *relaycommon.RelayInfo) *dt
 				midjourneyTask.Status = status
 				if status == "SUCCESS" {
 					midjourneyTask.Progress = "100%"
-					midjourneyTask.StartTime = time.Now().UnixNano() / int64(time.Millisecond)
-					midjourneyTask.FinishTime = time.Now().UnixNano() / int64(time.Millisecond)
+					midjourneyTask.StartTime = time.Now()
+					midjourneyTask.FinishTime = time.Now()
 					midjResponse.Code = 1
 				}
 			}

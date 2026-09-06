@@ -86,6 +86,7 @@ export function SignUpForm({
   } = useEmailVerification({
     turnstileToken,
     validateTurnstile,
+    type: 'register',
   })
 
   const form = useForm<z.infer<typeof registerFormSchema>>({

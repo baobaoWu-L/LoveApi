@@ -43,13 +43,13 @@ export const channelSchema = z.object({
   status: z.number(), // 1: enabled, 0: manual disabled, 2: auto disabled
   name: z.string(),
   weight: z.number().nullish(),
-  created_time: z.number(),
-  test_time: z.number(),
+  created_time: z.union([z.number(), z.string()]),
+  test_time: z.union([z.number(), z.string()]),
   response_time: z.number(), // in milliseconds
   base_url: z.string().nullish(),
   other: z.string().default(''),
   balance: z.number().default(0), // in USD
-  balance_updated_time: z.number(),
+  balance_updated_time: z.union([z.number(), z.string()]),
   models: z.string().default(''),
   group: z.string().default('default'),
   used_quota: z.number().default(0),

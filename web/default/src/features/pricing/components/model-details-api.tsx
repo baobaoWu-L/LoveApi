@@ -28,6 +28,7 @@ import {
   Zap,
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import { useStatus } from '@/hooks/use-status'
 import type { BundledLanguage } from 'shiki/bundle/web'
 import { cn } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
@@ -476,8 +477,11 @@ function CodeSamplesSection(props: {
   endpointMap: Record<string, { path?: string; method?: string }>
 }) {
   const { t } = useTranslation()
+  const { status } = useStatus()
   // 管理端可能运行在 localhost，示例必须使用实际对外 API 网关地址。
-  const baseUrl = 'https://api.LoveFulfiller.cn'
+  const baseUrl =
+    (status?.server_address as string) ||
+    (typeof window !== 'undefined' ? window.location.origin : '')
 
   const endpoints = useMemo(() => {
     const declaredTypes = props.model.supported_endpoint_types || []

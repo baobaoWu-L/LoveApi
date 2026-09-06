@@ -53,6 +53,7 @@ import { Label } from '@/components/ui/label'
 import { PasswordInput } from '@/components/password-input'
 import { Turnstile } from '@/components/turnstile'
 import { login, wechatLoginByCode } from '@/features/auth/api'
+import { EmailCodeLogin } from '@/features/auth/components/email-code-login'
 import { LegalConsent } from '@/features/auth/components/legal-consent'
 import { OAuthProviders } from '@/features/auth/components/oauth-providers'
 import { loginFormSchema } from '@/features/auth/constants'
@@ -74,6 +75,7 @@ export function UserAuthForm({
   const [isPasskeyLoading, setIsPasskeyLoading] = useState(false)
   const [isWeChatDialogOpen, setIsWeChatDialogOpen] = useState(false)
   const [isWeChatSubmitting, setIsWeChatSubmitting] = useState(false)
+  const [emailLoginMode, setEmailLoginMode] = useState(false)
   const legalConsentErrorMessage = t('Please agree to the legal terms first')
   const loginFailedMessage = t('Login failed')
 
@@ -325,14 +327,36 @@ export function UserAuthForm({
         />
 
         {/* Submit Button */}
-        <Button
-          type='submit'
-          className='mt-2 w-full justify-center gap-2 rounded-md border-0 bg-neutral-900 text-white hover:bg-neutral-800 dark:bg-white dark:text-neutral-900 dark:hover:bg-neutral-200'
-          disabled={isLoading || (requiresLegalConsent && !agreedToLegal)}
-        >
-          {isLoading ? <Loader2 className='animate-spin' /> : null}
-          {t('Sign in')}
-        </Button>
+        {!emailLoginMode && (
+          <Button
+            type='submit'
+            className='mt-2 w-full justify-center gap-2 rounded-md border-0 bg-neutral-900 text-white hover:bg-neutral-800 dark:bg-white dark:text-neutral-900 dark:hover:bg-neutral-200'
+            disabled={isLoading || (requiresLegalConsent && !agreedToLegal)}
+          >
+            {isLoading ? <Loader2 className='animate-spin' /> : null}
+            {t('Sign in')}
+          </Button>
+        )}
+
+        {/* Email code login toggle */}
+        <div className='text-center'>
+          <button
+            type='button'
+            onClick={() => setEmailLoginMode((m) => !m)}
+            className='text-muted-foreground text-sm font-medium hover:opacity-75'
+          >
+            {emailLoginMode
+              ? t('Use password to sign in')
+              : t('Use email verification code')}
+          </button>
+        </div>
+
+        {emailLoginMode && (
+          <EmailCodeLogin
+            turnstileToken={turnstileToken}
+            onSuccess={(data) => handleLoginSuccess(data, redirectTo)}
+          />
+        )}
 
         {/* Turnstile */}
         {isTurnstileEnabled && (

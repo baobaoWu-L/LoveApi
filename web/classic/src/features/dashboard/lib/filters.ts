@@ -16,7 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { getRollingDateRange, type TimeGranularity } from '@/lib/time'
+import type { TimeGranularity } from '@/lib/time'
 import {
   DASHBOARD_CHART_PREFERENCES_STORAGE_KEY,
   DEFAULT_DASHBOARD_CHART_PREFERENCES,
@@ -143,11 +143,8 @@ export function getDefaultDays(granularity?: TimeGranularity): number {
 export function buildDefaultDashboardFilters(
   preferences: DashboardChartPreferences = getSavedChartPreferences()
 ): DashboardFilters {
-  const { start, end } = getRollingDateRange(preferences.defaultTimeRangeDays)
   return {
     ...EMPTY_DASHBOARD_FILTERS,
-    start_timestamp: start,
-    end_timestamp: end,
     time_granularity: preferences.defaultTimeGranularity,
   }
 }

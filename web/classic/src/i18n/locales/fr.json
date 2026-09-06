@@ -1,5 +1,8 @@
 {
   "translation": {
+    "360": "360",
+    "1000": "1000",
+    "10000": "10000",
     "Execution Mode": "Mode d'exécution",
     "Synchronous": "Synchrone",
     "Image Generation Details": "Détails de génération d'image",
@@ -11,10 +14,6 @@
     "Reference only": "À titre indicatif, la facturation réelle peut différer",
     "Generated Image": "Image générée",
     "Generated Image Link": "Lien de l'image générée",
-
-    "360": "360",
-    "1000": "1000",
-    "10000": "10000",
     "_copy": "_copie",
     "，": ", ",
     ", and": ", et",
@@ -4745,6 +4744,16 @@
     "Zero retention": "Aucune rétention",
     "Zhipu": "Zhipu",
     "Zhipu V4": "Zhipu V4",
-    "Zoom": "Zoom"
+    "Zoom": "Zoom",
+    "OpenAI / compatible": "OpenAI / compatible",
+    "Set to responses for the Codex / ChatGPT protocol": "Set to responses for the Codex / ChatGPT protocol",
+    "Token Usage": "Utilisation des tokens",
+    "Darker squares mean more tokens used": "Les cases plus foncées indiquent une utilisation plus importante des tokens",
+    "No usage": "Aucune utilisation",
+    "Mon": "Lun",
+    "Wed": "Mer",
+    "Fri": "Ven",
+    "Token Usage Heatmap": "Utilisation des tokens",
+    "12 months": "12 mois"
   }
 }

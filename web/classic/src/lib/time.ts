@@ -27,6 +27,23 @@ import dayjs from '@/lib/dayjs'
 export type TimeGranularity = 'hour' | 'day' | 'week'
 
 /**
+ * Normalize a raw timestamp (numeric seconds/millis or RFC3339 string) to
+ * epoch milliseconds, or null for empty/sentinel values. Backend time fields
+ * are migrating from unix integers to DATETIME strings.
+ */
+function toMs(
+  value?: number | string,
+  unit: 'seconds' | 'milliseconds' = 'seconds'
+): number | null {
+  if (value == null || value === '' || value === -1 || value === 0) return null
+  if (typeof value === 'string') {
+    const ms = Date.parse(value)
+    return Number.isNaN(ms) ? null : ms
+  }
+  return unit === 'seconds' ? value * 1000 : value
+}
+
+/**
  * Convert Date object to Unix timestamp (seconds)
  */
 export function dateToUnixTimestamp(date: Date): number {
@@ -98,6 +115,20 @@ export function getRollingDateRange(
 }
 
 /**
+ * Get the current calendar month from its first day through the current time.
+ * This range is used by dashboard data queries so the backend can filter its
+ * datetime column directly instead of approximating a month with 30 days.
+ */
+export function getCurrentMonthDateRange(
+  fromDate: Date = new Date()
+): { start: Date; end: Date } {
+  const end = new Date(fromDate)
+  const start = new Date(end.getFullYear(), end.getMonth(), 1)
+  start.setHours(0, 0, 0, 0)
+  return { start, end }
+}
+
+/**
  * Compute time range as Unix timestamps (seconds)
  * @param days Default number of days if no dates provided
  * @param startDate Optional start date
@@ -142,8 +173,9 @@ export function computeTimeRange(
 /**
  * Format Unix timestamp (seconds) to YYYY-MM-DD
  */
-export function formatDate(tsSec: number): string {
-  return dayjs(tsSec * 1000).format('YYYY-MM-DD')
+export function formatDate(tsSec?: number | string): string {
+  const ms = toMs(tsSec, 'seconds')
+  return ms == null ? '' : dayjs(ms).format('YYYY-MM-DD')
 }
 
 /**
@@ -160,10 +192,12 @@ export function formatDateTimeObject(date: Date): string {
  * @returns Formatted string suitable for chart axis
  */
 export function formatChartTime(
-  timestamp: number,
+  timestamp?: number | string,
   granularity: TimeGranularity = 'day'
 ): string {
-  const d = dayjs(timestamp * 1000)
+  const ms = toMs(timestamp, 'seconds')
+  if (ms == null) return ''
+  const d = dayjs(ms)
   let result = d.format('MM-DD')
 
   if (granularity === 'hour') {

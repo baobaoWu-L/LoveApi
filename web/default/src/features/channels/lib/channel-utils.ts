@@ -363,11 +363,14 @@ export function getResponseTimeConfig(timeMs: number) {
  * Format Unix timestamp to relative time
  * e.g., "2 hours ago", "3 days ago"
  */
-export function formatRelativeTime(timestamp: number): string {
-  if (!timestamp || timestamp === 0) return 'Never'
-
+export function formatRelativeTime(timestamp?: number | string): string {
+  if (timestamp == null || timestamp === 0 || timestamp === '') return 'Never'
+  const ms =
+    typeof timestamp === 'string' ? Date.parse(timestamp) : timestamp * 1000
+  if (Number.isNaN(ms) || (typeof timestamp === 'string' && new Date(ms).getUTCFullYear() <= 1))
+    return 'Never'
   try {
-    return dayjs(timestamp * 1000).fromNow()
+    return dayjs(ms).fromNow()
   } catch {
     return 'Unknown'
   }
@@ -376,8 +379,8 @@ export function formatRelativeTime(timestamp: number): string {
 /**
  * Format Unix timestamp to date string
  */
-export function formatTimestamp(timestamp: number): string {
-  if (!timestamp || timestamp === 0) return 'N/A'
+export function formatTimestamp(timestamp?: number | string): string {
+  if (timestamp == null || timestamp === 0 || timestamp === '') return 'N/A'
 
   try {
     return formatTimestampToDate(timestamp)

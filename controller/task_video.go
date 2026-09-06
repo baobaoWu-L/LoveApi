@@ -118,7 +118,7 @@ func updateVideoSingleTask(ctx context.Context, adaptor channel.TaskAdaptor, cha
 
 	logger.LogDebug(ctx, fmt.Sprintf("UpdateVideoSingleTask taskResult: %+v", taskResult))
 
-	now := time.Now().Unix()
+	now := time.Now()
 	if taskResult.Status == "" {
 		//return fmt.Errorf("task %s status is empty", taskId)
 		taskResult = relaycommon.FailTaskInfo("upstream returned empty status")
@@ -137,12 +137,12 @@ func updateVideoSingleTask(ctx context.Context, adaptor channel.TaskAdaptor, cha
 		task.Progress = "20%"
 	case model.TaskStatusInProgress:
 		task.Progress = "30%"
-		if task.StartTime == 0 {
+		if task.StartTime.IsZero() {
 			task.StartTime = now
 		}
 	case model.TaskStatusSuccess:
 		task.Progress = "100%"
-		if task.FinishTime == 0 {
+		if task.FinishTime.IsZero() {
 			task.FinishTime = now
 		}
 		if !(len(taskResult.Url) > 5 && taskResult.Url[:5] == "data:") {
@@ -242,7 +242,7 @@ func updateVideoSingleTask(ctx context.Context, adaptor channel.TaskAdaptor, cha
 		logger.LogJson(ctx, fmt.Sprintf("Task %s failed", taskId), task)
 		task.Status = model.TaskStatusFailure
 		task.Progress = "100%"
-		if task.FinishTime == 0 {
+		if task.FinishTime.IsZero() {
 			task.FinishTime = now
 		}
 		task.FailReason = taskResult.Reason

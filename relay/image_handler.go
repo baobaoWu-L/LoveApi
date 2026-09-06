@@ -167,6 +167,8 @@ func ImageHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *type
 		}
 		c.Set("image_billing_detail", map[string]interface{}{
 			"model":              request.Model,
+			"size":               request.Size,
+			"quality":            quality,
 			"resolution_tier":    tier,
 			"unit_price_usd":     unitPrice,
 			"requested_images":   imageN,

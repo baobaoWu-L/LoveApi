@@ -247,24 +247,6 @@ function saveCurrentImageMetadata(userId: number | null, image: GeneratedImage) 
   }
 }
 
-async function readCurrentImageMetadata(userId: number | null): Promise<GeneratedImage | null> {
-  if (userId == null) return null
-  try {
-    const raw = localStorage.getItem(getCurrentImageStorageKey(userId))
-    if (!raw) return null
-    const image = JSON.parse(raw) as GeneratedImage
-    if (!image?.id) return null
-    if (image.b64_json) return image
-    if (image.cache_key) {
-      const stored = await readImageFromIndexedDb(image.cache_key)
-      if (stored) return { ...image, b64_json: stored }
-    }
-    return image
-  } catch {
-    return null
-  }
-}
-
 type PersistedGenerationState = {
   startedAt: number
   model: string
@@ -546,7 +528,9 @@ export function Canvas() {
         const remote = await getCanvasHistory()
         if (remote.length > 0) {
           const hydrated = await Promise.all(remote.map((img) => hydrateLatestUrl(img)))
-          if (!closed) { setHistory(hydrated) }
+          // 用 merge 而非整体替换：防止 WebSocket 在服务端尚未写入最新图时，
+          // 用旧快照覆盖掉本地刚生成的最新结果（导致「生成后历史顶部退回到旧图」）。
+          if (!closed) { setHistory((prev) => mergeUniqueById([hydrated, prev])) }
           return
         }
       } catch { /* fall back to the local migration store */ }
@@ -566,7 +550,7 @@ export function Canvas() {
         }
         return img
       }))
-      if (!closed) setHistory(hydrated)
+      if (!closed) setHistory((prev) => mergeUniqueById([hydrated, prev]))
     }
     const onHistoryEvent = () => { void refreshFromStorage() }
     window.addEventListener('canvas-history-updated', onHistoryEvent)

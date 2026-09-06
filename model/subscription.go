@@ -175,19 +175,19 @@ type SubscriptionPlan struct {
 	QuotaResetPeriod        string `json:"quota_reset_period" gorm:"type:varchar(16);default:'never'"`
 	QuotaResetCustomSeconds int64  `json:"quota_reset_custom_seconds" gorm:"type:bigint;default:0"`
 
-	CreatedAt int64 `json:"created_at" gorm:"bigint"`
-	UpdatedAt int64 `json:"updated_at" gorm:"bigint"`
+	CreatedAt time.Time `json:"created_at" gorm:"type:datetime"`
+	UpdatedAt time.Time `json:"updated_at" gorm:"type:datetime"`
 }
 
 func (p *SubscriptionPlan) BeforeCreate(tx *gorm.DB) error {
-	now := common.GetTimestamp()
+	now := time.Now()
 	p.CreatedAt = now
 	p.UpdatedAt = now
 	return nil
 }
 
 func (p *SubscriptionPlan) BeforeUpdate(tx *gorm.DB) error {
-	p.UpdatedAt = common.GetTimestamp()
+	p.UpdatedAt = time.Now()
 	return nil
 }
 
@@ -201,16 +201,16 @@ type SubscriptionOrder struct {
 	TradeNo         string `json:"trade_no" gorm:"unique;type:varchar(255);index"`
 	PaymentMethod   string `json:"payment_method" gorm:"type:varchar(50)"`
 	PaymentProvider string `json:"payment_provider" gorm:"type:varchar(50);default:''"`
-	Status          string `json:"status"`
-	CreateTime      int64  `json:"create_time"`
-	CompleteTime    int64  `json:"complete_time"`
+	Status          string     `json:"status"`
+	CreateTime      time.Time  `json:"create_time" gorm:"type:datetime"`
+	CompleteTime    *time.Time `json:"complete_time" gorm:"type:datetime"`
 
 	ProviderPayload string `json:"provider_payload" gorm:"type:text"`
 }
 
 func (o *SubscriptionOrder) Insert() error {
-	if o.CreateTime == 0 {
-		o.CreateTime = common.GetTimestamp()
+	if o.CreateTime.IsZero() {
+		o.CreateTime = time.Now()
 	}
 	return DB.Create(o).Error
 }
@@ -239,31 +239,31 @@ type UserSubscription struct {
 	AmountTotal int64 `json:"amount_total" gorm:"type:bigint;not null;default:0"`
 	AmountUsed  int64 `json:"amount_used" gorm:"type:bigint;not null;default:0"`
 
-	StartTime int64  `json:"start_time" gorm:"bigint"`
-	EndTime   int64  `json:"end_time" gorm:"bigint;index;index:idx_user_sub_active,priority:3"`
-	Status    string `json:"status" gorm:"type:varchar(32);index;index:idx_user_sub_active,priority:2"` // active/expired/cancelled
+	StartTime time.Time `json:"start_time" gorm:"type:datetime"`
+	EndTime   time.Time `json:"end_time" gorm:"type:datetime;index;index:idx_user_sub_active,priority:3"`
+	Status    string    `json:"status" gorm:"type:varchar(32);index;index:idx_user_sub_active,priority:2"` // active/expired/cancelled
 
 	Source string `json:"source" gorm:"type:varchar(32);default:'order'"` // order/admin
 
-	LastResetTime int64 `json:"last_reset_time" gorm:"type:bigint;default:0"`
-	NextResetTime int64 `json:"next_reset_time" gorm:"type:bigint;default:0;index"`
+	LastResetTime *time.Time `json:"last_reset_time" gorm:"type:datetime;default:null"`
+	NextResetTime *time.Time `json:"next_reset_time" gorm:"type:datetime;default:null;index"`
 
 	UpgradeGroup  string `json:"upgrade_group" gorm:"type:varchar(64);default:''"`
 	PrevUserGroup string `json:"prev_user_group" gorm:"type:varchar(64);default:''"`
 
-	CreatedAt int64 `json:"created_at" gorm:"bigint"`
-	UpdatedAt int64 `json:"updated_at" gorm:"bigint"`
+	CreatedAt time.Time `json:"created_at" gorm:"type:datetime"`
+	UpdatedAt time.Time `json:"updated_at" gorm:"type:datetime"`
 }
 
 func (s *UserSubscription) BeforeCreate(tx *gorm.DB) error {
-	now := common.GetTimestamp()
+	now := time.Now()
 	s.CreatedAt = now
 	s.UpdatedAt = now
 	return nil
 }
 
 func (s *UserSubscription) BeforeUpdate(tx *gorm.DB) error {
-	s.UpdatedAt = common.GetTimestamp()
+	s.UpdatedAt = time.Now()
 	return nil
 }
 
@@ -271,29 +271,29 @@ type SubscriptionSummary struct {
 	Subscription *UserSubscription `json:"subscription"`
 }
 
-func calcPlanEndTime(start time.Time, plan *SubscriptionPlan) (int64, error) {
+func calcPlanEndTime(start time.Time, plan *SubscriptionPlan) (time.Time, error) {
 	if plan == nil {
-		return 0, errors.New("plan is nil")
+		return time.Time{}, errors.New("plan is nil")
 	}
 	if plan.DurationValue <= 0 && plan.DurationUnit != SubscriptionDurationCustom {
-		return 0, errors.New("duration_value must be > 0")
+		return time.Time{}, errors.New("duration_value must be > 0")
 	}
 	switch plan.DurationUnit {
 	case SubscriptionDurationYear:
-		return start.AddDate(plan.DurationValue, 0, 0).Unix(), nil
+		return start.AddDate(plan.DurationValue, 0, 0), nil
 	case SubscriptionDurationMonth:
-		return start.AddDate(0, plan.DurationValue, 0).Unix(), nil
+		return start.AddDate(0, plan.DurationValue, 0), nil
 	case SubscriptionDurationDay:
-		return start.Add(time.Duration(plan.DurationValue) * 24 * time.Hour).Unix(), nil
+		return start.Add(time.Duration(plan.DurationValue) * 24 * time.Hour), nil
 	case SubscriptionDurationHour:
-		return start.Add(time.Duration(plan.DurationValue) * time.Hour).Unix(), nil
+		return start.Add(time.Duration(plan.DurationValue) * time.Hour), nil
 	case SubscriptionDurationCustom:
 		if plan.CustomSeconds <= 0 {
-			return 0, errors.New("custom_seconds must be > 0")
+			return time.Time{}, errors.New("custom_seconds must be > 0")
 		}
-		return start.Add(time.Duration(plan.CustomSeconds) * time.Second).Unix(), nil
+		return start.Add(time.Duration(plan.CustomSeconds) * time.Second), nil
 	default:
-		return 0, fmt.Errorf("invalid duration_unit: %s", plan.DurationUnit)
+		return time.Time{}, fmt.Errorf("invalid duration_unit: %s", plan.DurationUnit)
 	}
 }
 
@@ -306,13 +306,13 @@ func NormalizeResetPeriod(period string) string {
 	}
 }
 
-func calcNextResetTime(base time.Time, plan *SubscriptionPlan, endUnix int64) int64 {
+func calcNextResetTime(base time.Time, plan *SubscriptionPlan, end time.Time) time.Time {
 	if plan == nil {
-		return 0
+		return time.Time{}
 	}
 	period := NormalizeResetPeriod(plan.QuotaResetPeriod)
 	if period == SubscriptionResetNever {
-		return 0
+		return time.Time{}
 	}
 	var next time.Time
 	switch period {
@@ -335,16 +335,16 @@ func calcNextResetTime(base time.Time, plan *SubscriptionPlan, endUnix int64) in
 			AddDate(0, 1, 0)
 	case SubscriptionResetCustom:
 		if plan.QuotaResetCustomSeconds <= 0 {
-			return 0
+			return time.Time{}
 		}
 		next = base.Add(time.Duration(plan.QuotaResetCustomSeconds) * time.Second)
 	default:
-		return 0
+		return time.Time{}
 	}
-	if endUnix > 0 && next.Unix() > endUnix {
-		return 0
+	if !end.IsZero() && next.After(end) {
+		return time.Time{}
 	}
-	return next.Unix()
+	return next
 }
 
 func GetSubscriptionPlanById(id int) (*SubscriptionPlan, error) {
@@ -400,7 +400,7 @@ func getUserGroupByIdTx(tx *gorm.DB, userId int) (string, error) {
 	return group, nil
 }
 
-func downgradeUserGroupForSubscriptionTx(tx *gorm.DB, sub *UserSubscription, now int64) (string, error) {
+func downgradeUserGroupForSubscriptionTx(tx *gorm.DB, sub *UserSubscription, now time.Time) (string, error) {
 	if tx == nil || sub == nil {
 		return "", errors.New("invalid downgrade args")
 	}
@@ -456,17 +456,18 @@ func CreateUserSubscriptionFromPlanTx(tx *gorm.DB, userId int, plan *Subscriptio
 			return nil, errors.New("已达到该套餐购买上限")
 		}
 	}
-	nowUnix := GetDBTimestamp()
-	now := time.Unix(nowUnix, 0)
-	endUnix, err := calcPlanEndTime(now, plan)
+	now := time.Now()
+	end, err := calcPlanEndTime(now, plan)
 	if err != nil {
 		return nil, err
 	}
 	resetBase := now
-	nextReset := calcNextResetTime(resetBase, plan, endUnix)
-	lastReset := int64(0)
-	if nextReset > 0 {
-		lastReset = now.Unix()
+	nextReset := calcNextResetTime(resetBase, plan, end)
+	var lastResetPtr *time.Time
+	var nextResetPtr *time.Time
+	if !nextReset.IsZero() {
+		lastResetPtr = &now
+		nextResetPtr = &nextReset
 	}
 	upgradeGroup := strings.TrimSpace(plan.UpgradeGroup)
 	prevGroup := ""
@@ -488,16 +489,16 @@ func CreateUserSubscriptionFromPlanTx(tx *gorm.DB, userId int, plan *Subscriptio
 		PlanId:        plan.Id,
 		AmountTotal:   plan.TotalAmount,
 		AmountUsed:    0,
-		StartTime:     now.Unix(),
-		EndTime:       endUnix,
+		StartTime:     now,
+		EndTime:       end,
 		Status:        "active",
 		Source:        source,
-		LastResetTime: lastReset,
-		NextResetTime: nextReset,
+		LastResetTime: lastResetPtr,
+		NextResetTime: nextResetPtr,
 		UpgradeGroup:  upgradeGroup,
 		PrevUserGroup: prevGroup,
-		CreatedAt:     common.GetTimestamp(),
-		UpdatedAt:     common.GetTimestamp(),
+		CreatedAt:     now,
+		UpdatedAt:     now,
 	}
 	if err := tx.Create(sub).Error; err != nil {
 		return nil, err
@@ -551,7 +552,7 @@ func CompleteSubscriptionOrder(tradeNo string, providerPayload string, expectedP
 			return err
 		}
 		order.Status = common.TopUpStatusSuccess
-		order.CompleteTime = common.GetTimestamp()
+		order.CompleteTime = ptrTime()
 		if providerPayload != "" {
 			order.ProviderPayload = providerPayload
 		}
@@ -584,7 +585,7 @@ func upsertSubscriptionTopUpTx(tx *gorm.DB, order *SubscriptionOrder) error {
 	if tx == nil || order == nil {
 		return errors.New("invalid subscription order")
 	}
-	now := common.GetTimestamp()
+	now := time.Now()
 	var topup TopUp
 	if err := tx.Where("trade_no = ?", order.TradeNo).First(&topup).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -595,7 +596,7 @@ func upsertSubscriptionTopUpTx(tx *gorm.DB, order *SubscriptionOrder) error {
 				TradeNo:       order.TradeNo,
 				PaymentMethod: order.PaymentMethod,
 				CreateTime:    order.CreateTime,
-				CompleteTime:  now,
+				CompleteTime:  &now,
 				Status:        common.TopUpStatusSuccess,
 			}
 			return tx.Create(&topup).Error
@@ -608,10 +609,10 @@ func upsertSubscriptionTopUpTx(tx *gorm.DB, order *SubscriptionOrder) error {
 	} else if topup.PaymentMethod != order.PaymentMethod {
 		return ErrPaymentMethodMismatch
 	}
-	if topup.CreateTime == 0 {
+	if topup.CreateTime.IsZero() {
 		topup.CreateTime = order.CreateTime
 	}
-	topup.CompleteTime = now
+	topup.CompleteTime = &now
 	topup.Status = common.TopUpStatusSuccess
 	return tx.Save(&topup).Error
 }
@@ -636,7 +637,7 @@ func ExpireSubscriptionOrder(tradeNo string, expectedPaymentProvider string) err
 			return nil
 		}
 		order.Status = common.TopUpStatusExpired
-		order.CompleteTime = common.GetTimestamp()
+		order.CompleteTime = ptrTime()
 		return tx.Save(&order).Error
 	})
 }
@@ -669,7 +670,7 @@ func GetAllActiveUserSubscriptions(userId int) ([]SubscriptionSummary, error) {
 	if userId <= 0 {
 		return nil, errors.New("invalid userId")
 	}
-	now := common.GetTimestamp()
+	now := time.Now()
 	var subs []UserSubscription
 	err := DB.Where("user_id = ? AND status = ? AND end_time > ?", userId, "active", now).
 		Order("end_time desc, id desc").
@@ -686,7 +687,7 @@ func HasActiveUserSubscription(userId int) (bool, error) {
 	if userId <= 0 {
 		return false, errors.New("invalid userId")
 	}
-	now := common.GetTimestamp()
+	now := time.Now()
 	var count int64
 	if err := DB.Model(&UserSubscription{}).
 		Where("user_id = ? AND status = ? AND end_time > ?", userId, "active", now).
@@ -730,7 +731,7 @@ func AdminInvalidateUserSubscription(userSubscriptionId int) (string, error) {
 	if userSubscriptionId <= 0 {
 		return "", errors.New("invalid userSubscriptionId")
 	}
-	now := common.GetTimestamp()
+	now := time.Now()
 	cacheGroup := ""
 	downgradeGroup := ""
 	var userId int
@@ -775,7 +776,7 @@ func AdminDeleteUserSubscription(userSubscriptionId int) (string, error) {
 	if userSubscriptionId <= 0 {
 		return "", errors.New("invalid userSubscriptionId")
 	}
-	now := common.GetTimestamp()
+	now := time.Now()
 	cacheGroup := ""
 	downgradeGroup := ""
 	var userId int
@@ -824,9 +825,9 @@ func ExpireDueSubscriptions(limit int) (int, error) {
 	if limit <= 0 {
 		limit = 200
 	}
-	now := GetDBTimestamp()
+	now := time.Now()
 	var subs []UserSubscription
-	if err := DB.Where("status = ? AND end_time > 0 AND end_time <= ?", "active", now).
+	if err := DB.Where("status = ? AND end_time <= ?", "active", now).
 		Order("end_time asc, id asc").
 		Limit(limit).
 		Find(&subs).Error; err != nil {
@@ -846,10 +847,10 @@ func ExpireDueSubscriptions(limit int) (int, error) {
 		cacheGroup := ""
 		err := DB.Transaction(func(tx *gorm.DB) error {
 			res := tx.Model(&UserSubscription{}).
-				Where("user_id = ? AND status = ? AND end_time > 0 AND end_time <= ?", userId, "active", now).
+				Where("user_id = ? AND status = ? AND end_time <= ?", userId, "active", now).
 				Updates(map[string]interface{}{
 					"status":     "expired",
-					"updated_at": common.GetTimestamp(),
+					"updated_at": time.Now(),
 				})
 			if res.Error != nil {
 				return res.Error
@@ -912,57 +913,56 @@ type SubscriptionPreConsumeRecord struct {
 	RequestId          string `json:"request_id" gorm:"type:varchar(64);uniqueIndex"`
 	UserId             int    `json:"user_id" gorm:"index"`
 	UserSubscriptionId int    `json:"user_subscription_id" gorm:"index"`
-	PreConsumed        int64  `json:"pre_consumed" gorm:"type:bigint;not null;default:0"`
-	Status             string `json:"status" gorm:"type:varchar(32);index"` // consumed/refunded
-	CreatedAt          int64  `json:"created_at" gorm:"bigint"`
-	UpdatedAt          int64  `json:"updated_at" gorm:"bigint;index"`
+	PreConsumed        int64     `json:"pre_consumed" gorm:"type:bigint;not null;default:0"`
+	Status             string    `json:"status" gorm:"type:varchar(32);index"` // consumed/refunded
+	CreatedAt          time.Time `json:"created_at" gorm:"type:datetime"`
+	UpdatedAt          time.Time `json:"updated_at" gorm:"type:datetime;index"`
 }
 
 func (r *SubscriptionPreConsumeRecord) BeforeCreate(tx *gorm.DB) error {
-	now := common.GetTimestamp()
+	now := time.Now()
 	r.CreatedAt = now
 	r.UpdatedAt = now
 	return nil
 }
 
 func (r *SubscriptionPreConsumeRecord) BeforeUpdate(tx *gorm.DB) error {
-	r.UpdatedAt = common.GetTimestamp()
+	r.UpdatedAt = time.Now()
 	return nil
 }
 
-func maybeResetUserSubscriptionWithPlanTx(tx *gorm.DB, sub *UserSubscription, plan *SubscriptionPlan, now int64) error {
+func maybeResetUserSubscriptionWithPlanTx(tx *gorm.DB, sub *UserSubscription, plan *SubscriptionPlan, now time.Time) error {
 	if tx == nil || sub == nil || plan == nil {
 		return errors.New("invalid reset args")
 	}
-	if sub.NextResetTime > 0 && sub.NextResetTime > now {
+	if sub.NextResetTime != nil && sub.NextResetTime.After(now) {
 		return nil
 	}
 	if NormalizeResetPeriod(plan.QuotaResetPeriod) == SubscriptionResetNever {
 		return nil
 	}
-	baseUnix := sub.LastResetTime
-	if baseUnix <= 0 {
-		baseUnix = sub.StartTime
+	base := sub.StartTime
+	if sub.LastResetTime != nil {
+		base = *sub.LastResetTime
 	}
-	base := time.Unix(baseUnix, 0)
 	next := calcNextResetTime(base, plan, sub.EndTime)
 	advanced := false
-	for next > 0 && next <= now {
+	for !next.IsZero() && !next.After(now) {
 		advanced = true
-		base = time.Unix(next, 0)
+		base = next
 		next = calcNextResetTime(base, plan, sub.EndTime)
 	}
 	if !advanced {
-		if sub.NextResetTime == 0 && next > 0 {
-			sub.NextResetTime = next
-			sub.LastResetTime = base.Unix()
+		if sub.NextResetTime == nil && !next.IsZero() {
+			sub.NextResetTime = &next
+			sub.LastResetTime = &base
 			return tx.Save(sub).Error
 		}
 		return nil
 	}
 	sub.AmountUsed = 0
-	sub.LastResetTime = base.Unix()
-	sub.NextResetTime = next
+	sub.LastResetTime = &base
+	sub.NextResetTime = &next
 	return tx.Save(sub).Error
 }
 
@@ -977,7 +977,7 @@ func PreConsumeUserSubscription(requestId string, userId int, modelName string, 
 	if amount <= 0 {
 		return nil, errors.New("amount must be > 0")
 	}
-	now := GetDBTimestamp()
+	now := time.Now()
 
 	returnValue := &SubscriptionPreConsumeResult{}
 
@@ -1101,9 +1101,9 @@ func ResetDueSubscriptions(limit int) (int, error) {
 	if limit <= 0 {
 		limit = 200
 	}
-	now := GetDBTimestamp()
+	now := time.Now()
 	var subs []UserSubscription
-	if err := DB.Where("next_reset_time > 0 AND next_reset_time <= ? AND status = ?", now, "active").
+	if err := DB.Where("next_reset_time IS NOT NULL AND next_reset_time <= ? AND status = ?", now, "active").
 		Order("next_reset_time asc").
 		Limit(limit).
 		Find(&subs).Error; err != nil {
@@ -1122,7 +1122,7 @@ func ResetDueSubscriptions(limit int) (int, error) {
 		err = DB.Transaction(func(tx *gorm.DB) error {
 			var locked UserSubscription
 			if err := tx.Set("gorm:query_option", "FOR UPDATE").
-				Where("id = ? AND next_reset_time > 0 AND next_reset_time <= ?", subCopy.Id, now).
+				Where("id = ? AND next_reset_time IS NOT NULL AND next_reset_time <= ?", subCopy.Id, now).
 				First(&locked).Error; err != nil {
 				return nil
 			}
@@ -1144,7 +1144,7 @@ func CleanupSubscriptionPreConsumeRecords(olderThanSeconds int64) (int64, error)
 	if olderThanSeconds <= 0 {
 		olderThanSeconds = 7 * 24 * 3600
 	}
-	cutoff := GetDBTimestamp() - olderThanSeconds
+	cutoff := time.Now().Add(-time.Duration(olderThanSeconds) * time.Second)
 	res := DB.Where("updated_at < ?", cutoff).Delete(&SubscriptionPreConsumeRecord{})
 	return res.RowsAffected, res.Error
 }

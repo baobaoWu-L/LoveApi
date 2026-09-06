@@ -16,7 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { useEffect } from 'react'
+import { Fragment, useEffect, useState, type MouseEvent } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { getRouteApi } from '@tanstack/react-router'
 import {
@@ -41,8 +41,11 @@ import { DEFAULT_LOGS_DATA, LOG_TYPE_ENUM } from '../constants'
 import { useColumnsByCategory } from '../lib/columns'
 import { fetchLogsByCategory } from '../lib/utils'
 import type { LogCategory } from '../types'
+import type { UsageLog } from '../data/schema'
+import type { TaskLog } from '../types'
 import { CommonLogsFilterBar } from './common-logs-filter-bar'
 import { TaskLogsFilterBar } from './task-logs-filter-bar'
+import { InlineLogDetails, InlineTaskDetails } from './dialogs/details-dialog'
 
 const route = getRouteApi('/_authenticated/usage-logs/$section')
 
@@ -131,6 +134,7 @@ export function UsageLogsTable({ logCategory }: UsageLogsTableProps) {
   })
 
   const logs = data?.items || []
+  const [expandedLogId, setExpandedLogId] = useState<string | null>(null)
   const columns = useColumnsByCategory(logCategory, isAdmin)
   const isLoadingData = isLoading || (isFetching && !data)
 
@@ -158,7 +162,13 @@ export function UsageLogsTable({ logCategory }: UsageLogsTableProps) {
     ensurePageInRange(pageCount)
   }, [pageCount, ensurePageInRange])
 
+  useEffect(() => {
+    setExpandedLogId(null)
+  }, [logCategory, pagination.pageIndex, columnFilters])
+
   const isCommon = logCategory === 'common'
+  const getLogKey = (row: { original: Record<string, unknown>; id: string }) =>
+    `${logCategory}:${String(row.original.id ?? row.original.task_id ?? row.id)}`
 
   return (
     <DataTablePage
@@ -187,15 +197,79 @@ export function UsageLogsTable({ logCategory }: UsageLogsTableProps) {
         const tintClass =
           isCommon && logType != null ? (logTypeRowTint[logType] ?? '') : ''
 
+        const log = row.original as Record<string, unknown>
+        const logId = getLogKey(row)
+        const isExpanded = expandedLogId === logId
+        const toggleExpanded = () => {
+          if (!logId) return
+          setExpandedLogId((current) => (current === logId ? null : logId))
+        }
+        const handleRowClick = (event: MouseEvent<HTMLTableRowElement>) => {
+          const target = event.target as HTMLElement
+          if (target.closest('button, a, input, textarea, select, [role="button"]')) return
+          toggleExpanded()
+        }
+
         return (
-          <TableRow key={row.id} className={cn('transition-colors', tintClass)}>
-            {row.getVisibleCells().map((cell) => (
-              <TableCell key={cell.id} className={isCommon ? 'py-2' : 'py-3.5'}>
-                {flexRender(cell.column.columnDef.cell, cell.getContext())}
-              </TableCell>
-            ))}
-          </TableRow>
+          <Fragment key={row.id}>
+            <TableRow
+              className={cn(
+                'cursor-pointer transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
+                tintClass
+              )}
+              tabIndex={0}
+              aria-expanded={isExpanded}
+              onClick={handleRowClick}
+              onKeyDown={
+                (event) => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault()
+                    toggleExpanded()
+                  }
+                }
+              }
+            >
+              {row.getVisibleCells().map((cell) => (
+                <TableCell key={cell.id} className={isCommon ? 'py-2' : 'py-3.5'}>
+                  {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                </TableCell>
+              ))}
+            </TableRow>
+            {isExpanded && (
+              <TableRow className={tintClass}>
+                <TableCell colSpan={row.getVisibleCells().length} className='p-0'>
+                  {isCommon ? (
+                    <InlineLogDetails log={log as UsageLog} />
+                  ) : (
+                    <InlineTaskDetails log={log as TaskLog} />
+                  )}
+                </TableCell>
+              </TableRow>
+            )}
+          </Fragment>
         )
+      }}
+      mobileProps={{
+        getRowKey: getLogKey,
+        expandedRowKey: expandedLogId,
+        onRowClick: (row) => setExpandedLogId((current) => {
+          const key = getLogKey(row)
+          return current === key ? null : key
+        }),
+        onRowKeyDown: (row, event) => {
+          if (event.key !== 'Enter' && event.key !== ' ') return
+          event.preventDefault()
+          const key = getLogKey(row)
+          setExpandedLogId((current) => (current === key ? null : key))
+        },
+        renderExpandedRow: (row) => {
+          const log = row.original as Record<string, unknown>
+          return isCommon ? (
+            <InlineLogDetails log={log as UsageLog} />
+          ) : (
+            <InlineTaskDetails log={log as TaskLog} />
+          )
+        },
       }}
     />
   )

@@ -22,6 +22,7 @@ import {
   type Row,
   type Table,
 } from '@tanstack/react-table'
+import type { MouseEvent } from 'react'
 import { Database } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { cn } from '@/lib/utils'
@@ -41,6 +42,8 @@ interface MobileCardListProps<TData> {
   emptyDescription?: string
   getRowKey?: (row: Row<TData>) => string | number
   getRowClassName?: (row: Row<TData>) => string | undefined
+  onRowClick?: (row: Row<TData>, event: MouseEvent<HTMLDivElement>) => void
+  renderExpandedRow?: (row: Row<TData>) => React.ReactNode
 }
 
 interface MobileColumnMeta {
@@ -259,6 +262,8 @@ export function MobileCardList<TData>(props: MobileCardListProps<TData>) {
     emptyDescription,
     getRowKey,
     getRowClassName,
+    onRowClick,
+    renderExpandedRow,
   } = props
   const { t } = useTranslation()
 
@@ -301,9 +306,16 @@ export function MobileCardList<TData>(props: MobileCardListProps<TData>) {
         return (
           <div
             key={key}
-            className={cn('bg-card px-3 py-2.5', getRowClassName?.(row))}
+            className={cn(
+              'bg-card px-3 py-2.5',
+              onRowClick && 'cursor-pointer',
+              getRowClassName?.(row)
+            )}
           >
-            <RowComponent row={row} />
+            <div onClick={onRowClick ? (event) => onRowClick(row, event) : undefined}>
+              <RowComponent row={row} />
+            </div>
+            {renderExpandedRow?.(row)}
           </div>
         )
       })}

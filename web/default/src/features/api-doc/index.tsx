@@ -30,6 +30,7 @@ import { ChevronDown, ChevronRight, Copy } from 'lucide-react'
 
 function CodeBlock({ code, lang = 'json' }: { code: string; lang?: string }) {
   const { copyToClipboard } = useCopyToClipboard()
+  const { t } = useTranslation()
 
   return (
     <div className='overflow-hidden rounded-lg border'>
@@ -162,7 +163,7 @@ export function ApiDoc() {
                   {serverAddress}
                 </code>
               </div>
-              <CopyButton text={serverAddress} />
+              <CopyButton value={serverAddress} />
             </div>
           </Card>
 

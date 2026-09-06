@@ -1,5 +1,8 @@
 {
   "translation": {
+    "360": "360",
+    "1000": "1000",
+    "10000": "10000",
     "Execution Mode": "Режим выполнения",
     "Synchronous": "Синхронно",
     "Image Generation Details": "Детали генерации изображения",
@@ -11,10 +14,6 @@
     "Reference only": "Только для справки, фактическое списание может отличаться",
     "Generated Image": "Сгенерированное изображение",
     "Generated Image Link": "Ссылка на сгенерированное изображение",
-
-    "360": "360",
-    "1000": "1000",
-    "10000": "10000",
     "_copy": "_копировать",
     "，": ", ",
     ", and": ", и",
@@ -4745,6 +4744,16 @@
     "Zero retention": "Без хранения данных",
     "Zhipu": "Zhipu",
     "Zhipu V4": "Zhipu V4",
-    "Zoom": "Zoom"
+    "Zoom": "Zoom",
+    "OpenAI / compatible": "OpenAI / compatible",
+    "Set to responses for the Codex / ChatGPT protocol": "Set to responses for the Codex / ChatGPT protocol",
+    "Token Usage": "Использование токенов",
+    "Darker squares mean more tokens used": "Более темные ячейки означают больше использованных токенов",
+    "No usage": "Нет использования",
+    "Mon": "Пн",
+    "Wed": "Ср",
+    "Fri": "Пт",
+    "Token Usage Heatmap": "Использование токенов",
+    "12 months": "12 месяцев"
   }
 }

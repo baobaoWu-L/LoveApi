@@ -282,8 +282,8 @@ func (a *TaskAdaptor) ConvertToOpenAIVideo(originTask *model.Task) ([]byte, erro
 	openAIVideo.ID = originTask.TaskID
 	openAIVideo.Status = originTask.Status.ToVideoStatus()
 	openAIVideo.SetProgressStr(originTask.Progress)
-	openAIVideo.CreatedAt = originTask.CreatedAt
-	openAIVideo.CompletedAt = originTask.UpdatedAt
+	openAIVideo.CreatedAt = originTask.CreatedAtUnix()
+	openAIVideo.CompletedAt = originTask.UpdatedAtUnix()
 
 	if len(viduResp.Creations) > 0 && viduResp.Creations[0].URL != "" {
 		openAIVideo.SetMetadata("url", viduResp.Creations[0].URL)

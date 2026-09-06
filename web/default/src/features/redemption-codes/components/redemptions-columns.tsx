@@ -197,8 +197,11 @@ export function useRedemptionsColumns(): ColumnDef<Redemption>[] {
         <DataTableColumnHeader column={column} title={t('Expires')} />
       ),
       cell: ({ row }) => {
-        const expiredTime = row.getValue('expired_time') as number
-        if (expiredTime === 0) {
+        const expiredTime = row.getValue('expired_time') as
+          | number
+          | string
+          | null
+        if (expiredTime == null || expiredTime === 0 || expiredTime === '') {
           return (
             <StatusBadge
               label={t('Never')}
@@ -248,12 +251,13 @@ export function useRedemptionsColumns(): ColumnDef<Redemption>[] {
                 <div>
                   {t('User ID:')} {userId}
                 </div>
-                {redemption.redeemed_time > 0 && (
-                  <div>
-                    {t('Redeemed:')}{' '}
-                    {formatTimestampToDate(redemption.redeemed_time)}
-                  </div>
-                )}
+                {redemption.redeemed_time != null &&
+                  redemption.redeemed_time !== 0 && (
+                    <div>
+                      {t('Redeemed:')}{' '}
+                      {formatTimestampToDate(redemption.redeemed_time)}
+                    </div>
+                  )}
               </div>
             </TooltipContent>
           </Tooltip>

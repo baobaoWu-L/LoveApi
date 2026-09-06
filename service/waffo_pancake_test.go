@@ -65,7 +65,7 @@ func TestResolveWaffoPancakeTradeNo_UsesWebhookOrderIDWhenLocalOrderExists(t *te
 		Money:         29,
 		TradeNo:       "ORD_5dXBtmF2HLlHfbPNm0Wcnz",
 		PaymentMethod: model.PaymentMethodWaffoPancake,
-		CreateTime:    time.Now().Unix(),
+		CreateTime:    time.Now(),
 		Status:        common.TopUpStatusPending,
 	}
 	require.NoError(t, db.Create(topUp).Error)
@@ -96,7 +96,7 @@ func TestResolveWaffoPancakeTradeNo_FailsWhenWebhookOrderIDIsUnknown(t *testing.
 		Money:         29,
 		TradeNo:       "WAFFO_PANCAKE-42-123456-abc123",
 		PaymentMethod: model.PaymentMethodWaffoPancake,
-		CreateTime:    time.Now().Unix(),
+		CreateTime:    time.Now(),
 		Status:        common.TopUpStatusPending,
 	}
 	require.NoError(t, db.Create(topUp).Error)

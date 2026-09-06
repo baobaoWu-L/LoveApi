@@ -34,7 +34,6 @@ import {
   AudioPreviewDialog,
   type AudioClip,
 } from '../dialogs/audio-preview-dialog'
-import { FailReasonDialog } from '../dialogs/fail-reason-dialog'
 import { useUsageLogsContext } from '../usage-logs-provider'
 import {
   createDurationColumn,
@@ -230,7 +229,6 @@ export function useTaskLogsColumns(isAdmin: boolean): ColumnDef<TaskLog>[] {
         const log = row.original
         const failReason = row.getValue('fail_reason') as string
         const status = log.status
-        const [dialogOpen, setDialogOpen] = useState(false)
 
         const isSunoSuccess =
           log.platform === 'suno' && status === TASK_STATUS.SUCCESS
@@ -276,23 +274,12 @@ export function useTaskLogsColumns(isAdmin: boolean): ColumnDef<TaskLog>[] {
         }
 
         return (
-          <>
-            <button
-              type='button'
-              className='group flex max-w-[200px] items-center gap-1 text-left text-xs'
-              onClick={() => setDialogOpen(true)}
-              title={t('Click to view full error message')}
-            >
-              <span className='truncate leading-snug text-red-600 group-hover:underline dark:text-red-400'>
-                {failReason}
-              </span>
-            </button>
-            <FailReasonDialog
-              failReason={failReason}
-              open={dialogOpen}
-              onOpenChange={setDialogOpen}
-            />
-          </>
+          <span
+            className='block max-w-[200px] truncate text-xs leading-snug text-red-600 dark:text-red-400'
+            title={t('Error')}
+          >
+            {failReason}
+          </span>
         )
       },
       meta: { label: t('Details') },

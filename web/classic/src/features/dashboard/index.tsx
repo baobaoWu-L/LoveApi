@@ -65,6 +65,12 @@ const LazyConsumptionDistributionChart = lazy(() =>
   }))
 )
 
+const LazyTokenHeatmap = lazy(() =>
+  import('./components/models/token-heatmap').then((m) => ({
+    default: m.TokenHeatmap,
+  }))
+)
+
 const LazyPerformanceOverview = lazy(() =>
   import('./components/models/performance-overview').then((m) => ({
     default: m.PerformanceOverview,
@@ -157,6 +163,7 @@ export function Dashboard() {
     DASHBOARD_DEFAULT_SECTION) as DashboardSectionId
 
   const [modelData, setModelData] = useState<QuotaDataItem[]>([])
+  const [heatmapData, setHeatmapData] = useState<QuotaDataItem[]>([])
   const [dataLoading, setDataLoading] = useState(false)
   const [chartPreferences, setChartPreferences] =
     useState<DashboardChartPreferences>(() => getSavedChartPreferences())
@@ -179,6 +186,10 @@ export function Dashboard() {
     },
     []
   )
+
+  const handleHeatmapDataUpdate = useCallback((data: QuotaDataItem[]) => {
+    setHeatmapData(data)
+  }, [])
 
   const handleChartPreferencesChange = useCallback(
     (preferences: DashboardChartPreferences) => {
@@ -262,6 +273,7 @@ export function Dashboard() {
                   <LazyLogStatCards
                     filters={modelFilters}
                     onDataUpdate={handleDataUpdate}
+                    onHeatmapDataUpdate={handleHeatmapDataUpdate}
                   />
                 </Suspense>
               </FadeIn>
@@ -272,6 +284,11 @@ export function Dashboard() {
                   </Suspense>
                 </FadeIn>
               )}
+              <FadeIn delay={0.1}>
+                <Suspense fallback={<ModelChartsFallback />}>
+                  <LazyTokenHeatmap data={heatmapData} />
+                </Suspense>
+              </FadeIn>
               <FadeIn delay={0.1}>
                 <Suspense fallback={<ModelChartsFallback />}>
                   <LazyConsumptionDistributionChart

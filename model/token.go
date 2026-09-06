@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
@@ -17,9 +18,9 @@ type Token struct {
 	Key                string         `json:"key" gorm:"type:varchar(128);uniqueIndex"`
 	Status             int            `json:"status" gorm:"default:1"`
 	Name               string         `json:"name" gorm:"index" `
-	CreatedTime        int64          `json:"created_time" gorm:"bigint"`
-	AccessedTime       int64          `json:"accessed_time" gorm:"bigint"`
-	ExpiredTime        int64          `json:"expired_time" gorm:"bigint;default:-1"` // -1 means never expired
+	CreatedTime        time.Time      `json:"created_time" gorm:"type:datetime"`
+	AccessedTime       time.Time      `json:"accessed_time" gorm:"type:datetime"`
+	ExpiredTime        *time.Time     `json:"expired_time" gorm:"type:datetime;default:null"` // nil means never expired
 	RemainQuota        int            `json:"remain_quota" gorm:"default:0"`
 	UnlimitedQuota     bool           `json:"unlimited_quota"`
 	ModelLimitsEnabled bool           `json:"model_limits_enabled"`
@@ -196,7 +197,7 @@ func ValidateUserToken(key string) (token *Token, err error) {
 			token.Status != common.TokenStatusEnabled {
 			return token, ErrTokenInvalid
 		}
-		if token.ExpiredTime != -1 && token.ExpiredTime < common.GetTimestamp() {
+		if token.ExpiredTime != nil && token.ExpiredTime.Before(time.Now()) {
 			if !common.RedisEnabled {
 				token.Status = common.TokenStatusExpired
 				err := token.SelectUpdate()
@@ -396,7 +397,7 @@ func increaseTokenQuota(id int, quota int) (err error) {
 		map[string]interface{}{
 			"remain_quota":  gorm.Expr("remain_quota + ?", quota),
 			"used_quota":    gorm.Expr("used_quota - ?", quota),
-			"accessed_time": common.GetTimestamp(),
+			"accessed_time": time.Now(),
 		},
 	).Error
 	return err

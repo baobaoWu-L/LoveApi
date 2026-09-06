@@ -28,19 +28,22 @@ import type { NameRule, Model } from '../types'
 /**
  * Format timestamp to standard date string (YYYY-MM-DD HH:mm:ss)
  */
-export function formatTimestamp(timestamp: number): string {
-  if (!timestamp || timestamp === 0) return '-'
+export function formatTimestamp(timestamp?: number | string): string {
+  if (timestamp == null || timestamp === 0 || timestamp === '') return '-'
   return formatTimestampToDate(timestamp)
 }
 
 /**
  * Format relative time
  */
-export function formatRelativeTime(timestamp: number): string {
-  if (!timestamp || timestamp === 0) return 'Never'
+export function formatRelativeTime(timestamp?: number | string): string {
+  if (timestamp == null || timestamp === 0 || timestamp === '') return 'Never'
+  const ms =
+    typeof timestamp === 'string' ? Date.parse(timestamp) : timestamp * 1000
+  if (Number.isNaN(ms)) return 'Never'
 
   const now = Date.now()
-  const time = timestamp * 1000
+  const time = ms
   const diff = now - time
 
   const seconds = Math.floor(diff / 1000)

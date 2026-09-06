@@ -304,17 +304,28 @@ export function getTieredBillingSummary(
  * @param finishTime - Finish timestamp
  * @param unit - Unit of the timestamps ('seconds' or 'milliseconds')
  */
+function toDurationMs(
+  value?: number | string,
+  unit: 'seconds' | 'milliseconds' = 'milliseconds'
+): number | null {
+  if (value == null || value === '' || value === -1 || value === 0) return null
+  if (typeof value === 'string') {
+    const ms = Date.parse(value)
+    return Number.isNaN(ms) ? null : ms
+  }
+  return unit === 'seconds' ? value * 1000 : value
+}
+
 export function formatDuration(
-  submitTime?: number,
-  finishTime?: number,
+  submitTime?: number | string,
+  finishTime?: number | string,
   unit: 'seconds' | 'milliseconds' = 'milliseconds'
 ): { durationSec: number; variant: StatusBadgeProps['variant'] } | null {
-  if (!submitTime || !finishTime) return null
+  const s = toDurationMs(submitTime, unit)
+  const f = toDurationMs(finishTime, unit)
+  if (s == null || f == null) return null
 
-  const durationSec =
-    unit === 'milliseconds'
-      ? (finishTime - submitTime) / 1000
-      : finishTime - submitTime
+  const durationSec = (f - s) / 1000
 
   return { durationSec, variant: durationSec > 60 ? 'red' : 'green' }
 }

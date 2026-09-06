@@ -8,6 +8,7 @@ import (
 	"math/rand"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
@@ -28,13 +29,13 @@ type Channel struct {
 	Status             int     `json:"status" gorm:"default:1"`
 	Name               string  `json:"name" gorm:"index"`
 	Weight             *uint   `json:"weight" gorm:"default:0"`
-	CreatedTime        int64   `json:"created_time" gorm:"bigint"`
-	TestTime           int64   `json:"test_time" gorm:"bigint"`
-	ResponseTime       int     `json:"response_time"` // in milliseconds
-	BaseURL            *string `json:"base_url" gorm:"column:base_url;default:''"`
-	Other              string  `json:"other"`
-	Balance            float64 `json:"balance"` // in USD
-	BalanceUpdatedTime int64   `json:"balance_updated_time" gorm:"bigint"`
+	CreatedTime        time.Time `json:"created_time" gorm:"type:datetime"`
+	TestTime           time.Time `json:"test_time" gorm:"type:datetime"`
+	ResponseTime       int       `json:"response_time"` // in milliseconds
+	BaseURL            *string   `json:"base_url" gorm:"column:base_url;default:''"`
+	Other              string    `json:"other"`
+	Balance            float64   `json:"balance"` // in USD
+	BalanceUpdatedTime time.Time `json:"balance_updated_time" gorm:"type:datetime"`
 	Models             string  `json:"models"`
 	Group              string  `json:"group" gorm:"type:varchar(64);default:'default'"`
 	UsedQuota          int64   `json:"used_quota" gorm:"bigint;default:0"`
@@ -56,6 +57,22 @@ type Channel struct {
 
 	// cache info
 	Keys []string `json:"-" gorm:"-"`
+}
+
+// BeforeCreate 在渠道入库前填充时间字段，避免 time.Time 零值写入 MySQL
+// 触发 '0000-00-00' DATETIME 报错(NO_ZERO_DATE)。
+func (channel *Channel) BeforeCreate(tx *gorm.DB) error {
+	now := time.Now()
+	if channel.CreatedTime.IsZero() {
+		channel.CreatedTime = now
+	}
+	if channel.TestTime.IsZero() {
+		channel.TestTime = now
+	}
+	if channel.BalanceUpdatedTime.IsZero() {
+		channel.BalanceUpdatedTime = now
+	}
+	return nil
 }
 
 type ChannelInfo struct {
@@ -555,7 +572,7 @@ func (channel *Channel) Update() error {
 
 func (channel *Channel) UpdateResponseTime(responseTime int64) {
 	err := DB.Model(channel).Select("response_time", "test_time").Updates(Channel{
-		TestTime:     common.GetTimestamp(),
+		TestTime:     time.Now(),
 		ResponseTime: int(responseTime),
 	}).Error
 	if err != nil {
@@ -565,7 +582,7 @@ func (channel *Channel) UpdateResponseTime(responseTime int64) {
 
 func (channel *Channel) UpdateBalance(balance float64) {
 	err := DB.Model(channel).Select("balance_updated_time", "balance").Updates(Channel{
-		BalanceUpdatedTime: common.GetTimestamp(),
+		BalanceUpdatedTime: time.Now(),
 		Balance:            balance,
 	}).Error
 	if err != nil {

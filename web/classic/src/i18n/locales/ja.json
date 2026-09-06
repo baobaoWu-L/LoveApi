@@ -1,5 +1,8 @@
 {
   "translation": {
+    "360": "360",
+    "1000": "1000",
+    "10000": "10000",
     "Execution Mode": "実行モード",
     "Synchronous": "同期",
     "Image Generation Details": "画像生成の詳細",
@@ -11,10 +14,6 @@
     "Reference only": "参考のみ、実際の請求は異なる場合があります",
     "Generated Image": "生成画像",
     "Generated Image Link": "生成画像リンク",
-
-    "360": "360",
-    "1000": "1000",
-    "10000": "10000",
     "_copy": "_copy",
     "，": ", ",
     ", and": "、および",
@@ -4745,6 +4744,16 @@
     "Zero retention": "データ保持なし",
     "Zhipu": "Zhipu",
     "Zhipu V4": "Zhipu V 4",
-    "Zoom": "ズーム"
+    "Zoom": "ズーム",
+    "OpenAI / compatible": "OpenAI / compatible",
+    "Set to responses for the Codex / ChatGPT protocol": "Set to responses for the Codex / ChatGPT protocol",
+    "Token Usage": "トークン使用量",
+    "Darker squares mean more tokens used": "色が濃いほどトークン使用量が多いことを示します",
+    "No usage": "使用なし",
+    "Mon": "月",
+    "Wed": "水",
+    "Fri": "金",
+    "Token Usage Heatmap": "トークン使用量",
+    "12 months": "12か月"
   }
 }

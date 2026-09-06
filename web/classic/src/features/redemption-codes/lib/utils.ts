@@ -25,20 +25,26 @@ For commercial licensing, please contact support@quantumnous.com
  * @param timestamp - Unix timestamp in seconds (0 means never expires)
  * @returns true if the timestamp is in the past
  */
-export function isTimestampExpired(timestamp: number): boolean {
-  if (timestamp === 0) return false
+export function isTimestampExpired(
+  timestamp: number | string | null | undefined
+): boolean {
+  if (timestamp == null || timestamp === 0 || timestamp === '') return false
+  if (typeof timestamp === 'string') {
+    const ms = Date.parse(timestamp)
+    if (Number.isNaN(ms)) return false
+    return ms < Date.now()
+  }
+  // unix 秒（兼容旧数据）
   return timestamp < Date.now() / 1000
 }
 
 /**
  * Check if redemption code is expired based on business logic
  * Only enabled redemption codes (status === 1) can be considered expired
- * @param expired_time - Unix timestamp in seconds (0 means never expires)
- * @param status - Redemption status (1: enabled, 2: disabled, 3: used)
  * @returns true if the code is expired
  */
 export function isRedemptionExpired(
-  expired_time: number,
+  expired_time: number | string | null | undefined,
   status: number
 ): boolean {
   return status === 1 && isTimestampExpired(expired_time)

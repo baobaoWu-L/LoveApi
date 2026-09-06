@@ -29,9 +29,9 @@ export const redemptionSchema = z.object({
   key: z.string(),
   status: z.number(), // 1: enabled, 2: disabled, 3: used
   quota: z.number(),
-  created_time: z.number(),
-  redeemed_time: z.number(),
-  expired_time: z.number(), // 0 for never expires
+  created_time: z.union([z.number(), z.string()]),
+  redeemed_time: z.union([z.number(), z.string()]),
+  expired_time: z.union([z.number(), z.string()]).nullable(), // null for never expires
   used_user_id: z.number(),
 })
 
@@ -73,7 +73,7 @@ export interface RedemptionFormData {
   id?: number
   name: string
   quota: number
-  expired_time: number
+  expired_time: number | string | null // null 表示不过期
   count?: number // Only for create
   status?: number // Only for status update
 }

@@ -16,7 +16,7 @@ type Checkin struct {
 	UserId       int    `json:"user_id" gorm:"not null;uniqueIndex:idx_user_checkin_date"`
 	CheckinDate  string `json:"checkin_date" gorm:"type:varchar(10);not null;uniqueIndex:idx_user_checkin_date"` // 格式: YYYY-MM-DD
 	QuotaAwarded int    `json:"quota_awarded" gorm:"not null"`
-	CreatedAt    int64  `json:"created_at" gorm:"bigint"`
+	CreatedAt    time.Time `json:"created_at"`
 }
 
 // CheckinRecord 用于API返回的签到记录（不包含敏感字段）
@@ -78,7 +78,7 @@ func UserCheckin(userId int) (*Checkin, error) {
 		UserId:       userId,
 		CheckinDate:  today,
 		QuotaAwarded: quotaAwarded,
-		CreatedAt:    time.Now().Unix(),
+		CreatedAt:    time.Now(),
 	}
 
 	// 根据数据库类型选择不同的策略

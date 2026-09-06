@@ -259,11 +259,11 @@ func (a *TaskAdaptor) ConvertToOpenAIVideo(task *model.Task) ([]byte, error) {
 	video.Model = modelName
 	video.Status = task.Status.ToVideoStatus()
 	video.SetProgressStr(task.Progress)
-	video.CreatedAt = task.CreatedAt
-	if task.FinishTime > 0 {
-		video.CompletedAt = task.FinishTime
-	} else if task.UpdatedAt > 0 {
-		video.CompletedAt = task.UpdatedAt
+	video.CreatedAt = task.CreatedAtUnix()
+	if task.FinishTimeUnix() > 0 {
+		video.CompletedAt = task.FinishTimeUnix()
+	} else if task.UpdatedAtUnix() > 0 {
+		video.CompletedAt = task.UpdatedAtUnix()
 	}
 
 	return common.Marshal(video)

@@ -1,5 +1,8 @@
 {
   "translation": {
+    "360": "360",
+    "1000": "1000",
+    "10000": "10000",
     "Execution Mode": "Chế độ thực thi",
     "Synchronous": "Đồng bộ",
     "Image Generation Details": "Chi tiết tạo hình ảnh",
@@ -11,10 +14,6 @@
     "Reference only": "Chỉ để tham khảo, chi phí thực tế có thể khác",
     "Generated Image": "Hình ảnh đã tạo",
     "Generated Image Link": "Liên kết hình ảnh đã tạo",
-
-    "360": "360",
-    "1000": "1000",
-    "10000": "10000",
     "_copy": "_bản sao",
     "，": ", ",
     ", and": ", và",
@@ -4745,6 +4744,16 @@
     "Zero retention": "Không lưu dữ liệu",
     "Zhipu": "Zhipu",
     "Zhipu V4": "Zhipu V4",
-    "Zoom": "Zoom"
+    "Zoom": "Zoom",
+    "OpenAI / compatible": "OpenAI / compatible",
+    "Set to responses for the Codex / ChatGPT protocol": "Set to responses for the Codex / ChatGPT protocol",
+    "Token Usage": "Mức sử dụng token",
+    "Darker squares mean more tokens used": "Ô càng đậm nghĩa là sử dụng càng nhiều token",
+    "No usage": "Không có lượt sử dụng",
+    "Mon": "T2",
+    "Wed": "T4",
+    "Fri": "T6",
+    "Token Usage Heatmap": "Mức sử dụng token",
+    "12 months": "12 tháng"
   }
 }

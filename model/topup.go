@@ -3,6 +3,7 @@ package model
 import (
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/logger"
@@ -19,9 +20,15 @@ type TopUp struct {
 	TradeNo         string  `json:"trade_no" gorm:"unique;type:varchar(255);index"`
 	PaymentMethod   string  `json:"payment_method" gorm:"type:varchar(50)"`
 	PaymentProvider string  `json:"payment_provider" gorm:"type:varchar(50);default:''"`
-	CreateTime      int64   `json:"create_time"`
-	CompleteTime    int64   `json:"complete_time"`
-	Status          string  `json:"status"`
+	CreateTime      time.Time  `json:"create_time" gorm:"type:datetime"`
+	CompleteTime    *time.Time `json:"complete_time" gorm:"type:datetime"`
+	Status          string   `json:"status"`
+}
+
+// ptrTime 返回指向当前时间的指针，用于可空(never/未完成)的 DATETIME 字段。
+func ptrTime() *time.Time {
+	t := time.Now()
+	return &t
 }
 
 const (
@@ -131,7 +138,7 @@ func Recharge(referenceId string, customerId string, callerIp string) (err error
 			return errors.New("充值订单状态错误")
 		}
 
-		topUp.CompleteTime = common.GetTimestamp()
+		topUp.CompleteTime = ptrTime()
 		topUp.Status = common.TopUpStatusSuccess
 		err = tx.Save(topUp).Error
 		if err != nil {
@@ -158,11 +165,11 @@ func Recharge(referenceId string, customerId string, callerIp string) (err error
 }
 
 // topUpQueryWindowSeconds 限制充值记录查询的时间窗口（秒）。
-const topUpQueryWindowSeconds int64 = 30 * 24 * 60 * 60
+const topUpQueryWindowSeconds = 30 * 24 * 60 * 60
 
-// topUpQueryCutoff 返回允许查询的最早 create_time（秒级 Unix 时间戳）。
-func topUpQueryCutoff() int64 {
-	return common.GetTimestamp() - topUpQueryWindowSeconds
+// topUpQueryCutoff 返回允许查询的最早 create_time（DATETIME）。
+func topUpQueryCutoff() time.Time {
+	return time.Now().Add(-time.Duration(topUpQueryWindowSeconds) * time.Second)
 }
 
 func GetUserTopUps(userId int, pageInfo *common.PageInfo) (topups []*TopUp, total int64, err error) {
@@ -362,7 +369,7 @@ func ManualCompleteTopUp(tradeNo string, callerIp string) error {
 		}
 
 		// 标记完成
-		topUp.CompleteTime = common.GetTimestamp()
+		topUp.CompleteTime = ptrTime()
 		topUp.Status = common.TopUpStatusSuccess
 		if err := tx.Save(topUp).Error; err != nil {
 			return err
@@ -414,7 +421,7 @@ func RechargeCreem(referenceId string, customerEmail string, customerName string
 			return errors.New("充值订单状态错误")
 		}
 
-		topUp.CompleteTime = common.GetTimestamp()
+		topUp.CompleteTime = ptrTime()
 		topUp.Status = common.TopUpStatusSuccess
 		err = tx.Save(topUp).Error
 		if err != nil {
@@ -500,7 +507,7 @@ func RechargeWaffo(tradeNo string, callerIp string) (err error) {
 			return errors.New("无效的充值额度")
 		}
 
-		topUp.CompleteTime = common.GetTimestamp()
+		topUp.CompleteTime = ptrTime()
 		topUp.Status = common.TopUpStatusSuccess
 		if err := tx.Save(topUp).Error; err != nil {
 			return err
@@ -561,7 +568,7 @@ func RechargeWaffoPancake(tradeNo string) (err error) {
 			return errors.New("无效的充值额度")
 		}
 
-		topUp.CompleteTime = common.GetTimestamp()
+		topUp.CompleteTime = ptrTime()
 		topUp.Status = common.TopUpStatusSuccess
 		if err := tx.Save(topUp).Error; err != nil {
 			return err

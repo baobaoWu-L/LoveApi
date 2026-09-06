@@ -400,22 +400,14 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
           <DataTableColumnHeader column={column} title={t('User')} />
         ),
         cell: function UserCell({ row }) {
-          const { sensitiveVisible, setSelectedUserId, setUserInfoDialogOpen } =
-            useUsageLogsContext()
+          const { sensitiveVisible } = useUsageLogsContext()
           const log = row.original
 
           if (!log.username) return null
 
+          // 整行点击展开详情即可，这里仅展示用户信息，不弹窗（不拦截点击）
           return (
-            <button
-              type='button'
-              className='flex items-center gap-1.5 text-left'
-              onClick={(e) => {
-                e.stopPropagation()
-                setSelectedUserId(log.user_id)
-                setUserInfoDialogOpen(true)
-              }}
-            >
+            <div className='flex items-center gap-1.5 text-left'>
               <Avatar className='ring-border/60 size-6 ring-1'>
                 <AvatarFallback
                   className={cn(
@@ -431,10 +423,10 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
                   {sensitiveVisible ? getUserAvatarFallback(log.username) : '•'}
                 </AvatarFallback>
               </Avatar>
-              <span className='text-muted-foreground truncate text-sm hover:underline'>
+              <span className='text-muted-foreground truncate text-sm'>
                 {sensitiveVisible ? log.username : '••••'}
               </span>
-            </button>
+            </div>
           )
         },
         meta: { label: t('User'), mobileHidden: true },
@@ -659,6 +651,21 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
 
         return (
           <div className='flex flex-col gap-0.5'>
+            <div className='flex items-center gap-1'>
+              {promptTokens > 0 && (
+                <span className='inline-flex items-center rounded border border-sky-300/60 bg-sky-500/10 px-1 py-px text-[9px] font-medium text-sky-600 dark:border-sky-500/30 dark:bg-sky-500/10 dark:text-sky-300'>
+                  {t('Input')}
+                </span>
+              )}
+              {promptTokens > 0 && completionTokens > 0 && (
+                <span className='text-muted-foreground/50 text-[9px]'>/</span>
+              )}
+              {completionTokens > 0 && (
+                <span className='inline-flex items-center rounded border border-emerald-300/60 bg-emerald-500/10 px-1 py-px text-[9px] font-medium text-emerald-600 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300'>
+                  {t('Output')}
+                </span>
+              )}
+            </div>
             <span className='font-mono text-xs font-medium tabular-nums'>
               {promptTokens.toLocaleString()} /{' '}
               {completionTokens.toLocaleString()}

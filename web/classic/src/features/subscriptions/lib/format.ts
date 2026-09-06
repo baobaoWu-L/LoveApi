@@ -60,7 +60,11 @@ export function formatResetPeriod(
   return t('No Reset')
 }
 
-export function formatTimestamp(ts: number): string {
-  if (!ts) return '-'
+export function formatTimestamp(ts: number | string | null | undefined): string {
+  if (ts == null || ts === 0 || ts === '') return '-'
+  if (typeof ts === 'string') {
+    const ms = Date.parse(ts)
+    return Number.isNaN(ms) ? '-' : dayjs(ms).format('YYYY-MM-DD HH:mm:ss')
+  }
   return dayjs(ts * 1000).format('YYYY-MM-DD HH:mm:ss')
 }

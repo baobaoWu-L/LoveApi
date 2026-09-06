@@ -93,7 +93,7 @@ func SubscriptionRequestStripePay(c *gin.Context) {
 		TradeNo:         referenceId,
 		PaymentMethod:   model.PaymentMethodStripe,
 		PaymentProvider: model.PaymentProviderStripe,
-		CreateTime:      time.Now().Unix(),
+		CreateTime:      time.Now(),
 		Status:          common.TopUpStatusPending,
 	}
 	if err := order.Insert(); err != nil {

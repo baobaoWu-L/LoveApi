@@ -541,8 +541,8 @@ func mapTaskStatusToSimple(status model.TaskStatus) string {
 func TaskModel2Dto(task *model.Task) *dto.TaskDto {
 	return &dto.TaskDto{
 		ID:         task.ID,
-		CreatedAt:  task.CreatedAt,
-		UpdatedAt:  task.UpdatedAt,
+		CreatedAt:  task.CreatedAt.Unix(),
+		UpdatedAt:  task.UpdatedAt.Unix(),
 		TaskID:     task.TaskID,
 		Platform:   string(task.Platform),
 		UserId:     task.UserId,
@@ -553,9 +553,9 @@ func TaskModel2Dto(task *model.Task) *dto.TaskDto {
 		Status:     string(task.Status),
 		FailReason: task.FailReason,
 		ResultURL:  task.GetResultURL(),
-		SubmitTime: task.SubmitTime,
-		StartTime:  task.StartTime,
-		FinishTime: task.FinishTime,
+		SubmitTime: task.SubmitTime.Unix(),
+		StartTime:  task.StartTime.Unix(),
+		FinishTime: task.FinishTime.Unix(),
 		Progress:   task.Progress,
 		Properties: task.Properties,
 		Username:   task.Username,

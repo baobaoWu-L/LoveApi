@@ -58,11 +58,11 @@ export const userSubscriptionSchema = z.object({
   plan_id: z.number(),
   status: z.string(),
   source: z.string().optional(),
-  start_time: z.number(),
-  end_time: z.number(),
+  start_time: z.union([z.number(), z.string()]),
+  end_time: z.union([z.number(), z.string()]),
   amount_total: z.number(),
   amount_used: z.number(),
-  next_reset_time: z.number().optional(),
+  next_reset_time: z.union([z.number(), z.string()]).optional(),
 })
 
 export type UserSubscription = z.infer<typeof userSubscriptionSchema>

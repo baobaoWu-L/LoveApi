@@ -53,6 +53,19 @@ export async function login2fa(payload: TwoFAPayload) {
   return res.data
 }
 
+// Email verification code login
+export async function loginByEmail(
+  email: string,
+  code: string,
+  turnstile?: string
+): Promise<ApiResponse> {
+  const res = await api.post(
+    `/api/user/login/email?turnstile=${turnstile ?? ''}`,
+    { email, code }
+  )
+  return res.data
+}
+
 // User logout
 export async function logout(): Promise<ApiResponse> {
   const res = await api.get('/api/user/logout')
@@ -130,12 +143,14 @@ export async function register(payload: RegisterPayload): Promise<ApiResponse> {
 }
 
 // Send email verification code
+// type: register=注册验证码（默认），login=登录验证码
 export async function sendEmailVerification(
   email: string,
-  turnstile?: string
+  turnstile?: string,
+  type: 'register' | 'login' = 'register'
 ): Promise<ApiResponse> {
   const res = await api.get('/api/verification', {
-    params: { email, turnstile },
+    params: { email, turnstile, type },
   })
   return res.data
 }

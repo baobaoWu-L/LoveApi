@@ -213,7 +213,7 @@ func RequestWaffoPay(c *gin.Context) {
 		TradeNo:         merchantOrderId,
 		PaymentMethod:   model.PaymentMethodWaffo,
 		PaymentProvider: model.PaymentProviderWaffo,
-		CreateTime:      time.Now().Unix(),
+		CreateTime:      time.Now(),
 		Status:          common.TopUpStatusPending,
 	}
 	if err := topUp.Insert(); err != nil {

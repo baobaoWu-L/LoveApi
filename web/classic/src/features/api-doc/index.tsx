@@ -18,6 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { useState, useEffect, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useStatus } from '@/hooks/use-status'
 import { CopyButton } from '@/components/copy-button'
 import { Badge } from '@/components/ui/badge'
 import { Card } from '@/components/ui/card'
@@ -38,7 +39,8 @@ type SectionId =
   | 'claude'
   | 'deepseek'
   | 'qwen'
-  | 'ccswitch'
+  | 'ccswitch-codex'
+  | 'ccswitch-claude'
   | 'models'
   | 'endpoints'
   | 'examples'
@@ -51,7 +53,8 @@ const SECTION_IDS: SectionId[] = [
   'claude',
   'deepseek',
   'qwen',
-  'ccswitch',
+  'ccswitch-codex',
+  'ccswitch-claude',
   'models',
   'endpoints',
   'examples',
@@ -65,7 +68,8 @@ const SECTION_TITLES: Record<SectionId, string> = {
   claude: 'Claude configuration',
   deepseek: 'DeepSeek configuration',
   qwen: 'Qwen configuration',
-  ccswitch: 'CC Switch integration',
+  'ccswitch-codex': 'One-click import Codex',
+  'ccswitch-claude': 'One-click import Claude Code',
   models: 'Supported models',
   endpoints: 'API endpoints',
   examples: 'Code examples',
@@ -79,27 +83,28 @@ const NAV_GROUPS: NavGroup[] = [
   {
     title: 'Getting started',
     items: [
-      { id: 'intro', label: 'Introduction', icon: '📖' },
-      { id: 'quick-start', label: 'Quick start', icon: '🚀' },
+      { id: 'intro', label: 'Introduction', icon: '' },
+      { id: 'quick-start', label: 'Quick start', icon: '' },
     ],
   },
   {
     title: 'Model configuration',
     items: [
-      { id: 'codex', label: 'Codex (ChatGPT)', icon: '🤖' },
-      { id: 'claude', label: 'Claude', icon: '🗣️' },
-      { id: 'deepseek', label: 'DeepSeek', icon: '🐋' },
-      { id: 'qwen', label: 'Qwen', icon: '💫' },
-      { id: 'ccswitch', label: 'CC Switch integration', icon: '🔧' },
+      { id: 'codex', label: 'Codex (ChatGPT)', icon: '' },
+      { id: 'claude', label: 'Claude', icon: '' },
+      { id: 'deepseek', label: 'DeepSeek', icon: '' },
+      { id: 'qwen', label: 'Qwen', icon: '' },
+      { id: 'ccswitch-codex', label: 'One-click import Codex', icon: '' },
+      { id: 'ccswitch-claude', label: 'One-click import Claude Code', icon: '' },
     ],
   },
   {
     title: 'Reference',
     items: [
-      { id: 'models', label: 'Supported models', icon: '🧠' },
-      { id: 'endpoints', label: 'API endpoints', icon: '📡' },
-      { id: 'examples', label: 'Code examples', icon: '💻' },
-      { id: 'errors', label: 'Error codes', icon: '⚠️' },
+      { id: 'models', label: 'Supported models', icon: '' },
+      { id: 'endpoints', label: 'API endpoints', icon: '' },
+      { id: 'examples', label: 'Code examples', icon: '' },
+      { id: 'errors', label: 'Error codes', icon: '' },
     ],
   },
 ]
@@ -197,7 +202,7 @@ function CodexSubagentNote() {
   const { t } = useTranslation()
   return (
     <div className='rounded-lg border border-rose-300/70 bg-rose-50/70 p-3 text-xs leading-relaxed text-rose-700 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-300'>
-      <strong>⚠️ {t('Codex integration note')}:</strong> {t('Without the lock settings below, the main conversation uses your selected model, but Codex agents may call a different submodel. Check Console → Usage logs for details.')}{' '}
+      <strong> {t('Codex integration note')}:</strong> {t('Without the lock settings below, the main conversation uses your selected model, but Codex agents may call a different submodel. Check Console → Usage logs for details.')}{' '}
       {t('To use the same model (gpt-5.6-sol) for the main conversation and subagents, write the following to')}{' '}
       <code className='bg-muted rounded px-1 py-0.5 font-mono text-[10px]'>~/.codex/config.toml</code>{' '}
       {t('and start with')}{' '}
@@ -272,12 +277,77 @@ function EndpointCard({
 
 export function ApiDoc() {
   const { t } = useTranslation()
+  const { status } = useStatus()
   const [query, setQuery] = useState('')
   const [mobileOpen, setMobileOpen] = useState(false)
   const active = useActiveSection(SECTION_IDS)
 
   // 中转站对外地址：文档中的所有配置示例都指向这个真实可接入的地址
-  const serverAddress = 'https://api.LoveFulfiller.cn'
+  const serverAddress =
+    (status?.server_address as string) ||
+    (typeof window !== 'undefined' ? window.location.origin : '')
+
+  // 一键接入 Codex / Claude Code：把完整配置编码进 ccswitch deep link，
+  // 保证「用户选的哪个模型，真实调用的就是哪个模型」，避免二次手动粘贴。
+  const codexDefaultModel = 'gpt-5.6-sol'
+  const claudeDefaultModel = 'claude-sonnet-4-20250514'
+  const codexConfigToml = [
+    `model = "${codexDefaultModel}"`,
+    `model_provider = "loveapi"`,
+    `model_reasoning_effort = "medium"`,
+    `review_model = "${codexDefaultModel}"`,
+    `[agents]`,
+    `default_subagent_model = "${codexDefaultModel}"`,
+    `default_subagent_reasoning_effort = "medium"`,
+    ``,
+    `[model_providers.loveapi]`,
+    `name = "Love API"`,
+    `base_url = "${serverAddress}/v1"`,
+    `wire_api = "responses"`,
+    `requires_openai_auth = true`,
+    `web_search = "live"`,
+    ``,
+    `[features]`,
+    `collaboration_modes = true`,
+    `unified_exec = false`,
+    `multi_agent = true`,
+    `search_tool = true`,
+    `steer = true`,
+    ``,
+    `[profiles.loveapi]`,
+    `model = "${codexDefaultModel}"`,
+    `model_provider = "loveapi"`,
+  ].join('\n')
+  const claudeSettingsJson = JSON.stringify(
+    {
+      env: {
+        ANTHROPIC_BASE_URL: serverAddress,
+        ANTHROPIC_AUTH_TOKEN: 'sk-your-loveapi-key',
+        ANTHROPIC_MODEL: claudeDefaultModel,
+        ANTHROPIC_SMALL_FAST_MODEL: 'claude-3-5-haiku-20241022',
+      },
+    },
+    null,
+    2
+  )
+  const codexCcsUrl = [
+    `ccswitch://v1/import?resource=provider&app=codex&name=LoveApi`,
+    `endpoint=${serverAddress}/v1`,
+    `apiKey=sk-your-loveapi-key`,
+    `model=${codexDefaultModel}`,
+    `homepage=${serverAddress}`,
+    `enabled=true`,
+    `extraConfig=${encodeURIComponent(codexConfigToml)}`,
+  ].join('&')
+  const claudeCcsUrl = [
+    `ccswitch://v1/import?resource=provider&app=claude&name=LoveApi`,
+    `endpoint=${serverAddress}`,
+    `apiKey=sk-your-loveapi-key`,
+    `model=${claudeDefaultModel}`,
+    `homepage=${serverAddress}`,
+    `enabled=true`,
+    `extraConfig=${encodeURIComponent(claudeSettingsJson)}`,
+  ].join('&')
 
   const filteredGroups = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -399,7 +469,7 @@ export function ApiDoc() {
                   </header>
 
                   {/* 1. 引言 */}
-                  <Section id='intro' icon='📖' title={t(SECTION_TITLES.intro)}>
+                  <Section id='intro' icon='' title={t(SECTION_TITLES.intro)}>
                     <p className='text-muted-foreground text-sm leading-relaxed'>
                       {t('LoveAPI provides an OpenAI-compatible API. Replace your client Base URL and API key to call multiple models through one protocol with automatic channel routing.')}
                     </p>
@@ -425,8 +495,8 @@ export function ApiDoc() {
                   {/* 2. 快速接入 */}
                   <Section
                     id='quick-start'
-                    icon='🚀'
-                    title={SECTION_TITLES['quick-start']}
+                    icon=''
+                    title={t(SECTION_TITLES['quick-start'])}
                   >
                     <p className='text-muted-foreground text-sm leading-relaxed'>
                       {t('Replace the Base URL and Authorization header in your existing API calls with your LoveAPI credentials.')}
@@ -445,7 +515,7 @@ export function ApiDoc() {
                       </div>
                     </Card>
                     <div className='bg-muted/50 border-border/50 flex items-start gap-3 rounded-lg p-4 text-sm'>
-                      <span className='text-lg'>💡</span>
+                      <span className='text-lg'></span>
                       <div className='text-muted-foreground space-y-1'>
                         <strong className='text-foreground'>{t('Tip')}:</strong>{' '}
                         {t('Include Authorization: Bearer <your_api_key> in the request header. Find your key in the console under API keys.')}{' '}
@@ -459,7 +529,7 @@ export function ApiDoc() {
                   {/* 3. Codex 配置 */}
                   <Section
                     id='codex'
-                    icon='🤖'
+                    icon=''
                     title={t(SECTION_TITLES.codex)}
                   >
                     <p className='text-muted-foreground text-sm leading-relaxed'>
@@ -581,7 +651,7 @@ model_provider = "loveapi"`}
                   {/* 4. Claude 配置 */}
                   <Section
                     id='claude'
-                    icon='🗣️'
+                    icon=''
                     title={t(SECTION_TITLES.claude)}
                   >
                     <p className='text-muted-foreground text-sm leading-relaxed'>
@@ -622,7 +692,7 @@ model_provider = "loveapi"`}
                   {/* 5. DeepSeek 配置 */}
                   <Section
                     id='deepseek'
-                    icon='🐋'
+                    icon=''
                     title={t(SECTION_TITLES.deepseek)}
                   >
                     <p className='text-muted-foreground text-sm leading-relaxed'>
@@ -658,7 +728,7 @@ print(resp.choices[0].message.content)`}
                   {/* 6. Qwen 配置 */}
                   <Section
                     id='qwen'
-                    icon='💫'
+                    icon=''
                     title={t(SECTION_TITLES.qwen)}
                   >
                     <p className='text-muted-foreground text-sm leading-relaxed'>
@@ -687,83 +757,59 @@ print(resp.choices[0].message.content)`}
                     </div>
                   </Section>
 
-                  {/* 7. CC Switch 接入 */}
+                  {/* 7. 一键接入 Codex */}
                   <Section
-                    id='ccswitch'
-                    icon='🔧'
-                    title={t(SECTION_TITLES.ccswitch)}
+                    id='ccswitch-codex'
+                    icon=''
+                    title={t(SECTION_TITLES['ccswitch-codex'])}
                   >
                     <p className='text-muted-foreground text-sm leading-relaxed'>
-                      {t('CC Switch is a model routing tool with one-click provider import. Use the deep link below to add LoveAPI as a Codex provider')}
+                      {t('One-click import Love API as a Codex provider via CC Switch')}
                       ({t('for app=codex the endpoint must include')}{' '}
-                      <code className='bg-muted rounded px-1 text-xs'>/v1</code>). {t('The deep link only imports the provider; to pin one model, paste step ② into')}{' '}
-                      <code className='bg-muted rounded px-1 text-xs'>~/.codex/config.toml</code>{' '}
-                      {t('and launch it with step ③:')}
+                      <code className='bg-muted rounded px-1 text-xs'>/v1</code>).{' '}
+                      {t('The deep link carries the full config; you do not need to copy a config file separately, and whichever model you pick is the one actually called.')}
                     </p>
-                    <CodeBlock
-                      code={`# ① 一键导入 Love Api 为 Codex 提供方（endpoint 需带 /v1）
-ccswitch://v1/import?resource=provider&app=codex&name=LoveApi&endpoint=${serverAddress}/v1&apiKey=sk-your-loveapi-key&model=gpt-5.6-sol&homepage=${serverAddress}&enabled=true`}
-                      lang='text'
-                    />
-                    <CodeBlock
-                      code={`# ② 粘贴到 ~/.codex/config.toml，固化单一模型（含主模型 /review 审查 / 子代理三处）
-model = "gpt-5.6-sol"
-review_model = "gpt-5.6-sol"
-[agents]
-default_subagent_model = "gpt-5.6-sol"
-
-# ③ 用它启动，只使用上面这一个模型
-[profiles.loveapi]
-model = "gpt-5.6-sol"
-model_provider = "loveapi"`}
-                      lang='toml'
-                    />
-                    <div className='overflow-hidden rounded-lg border'>
-                      <table className='w-full text-sm'>
-                        <thead>
-                          <tr className='bg-muted/30 text-left'>
-                            <th className='px-4 py-2 font-medium'>{t('Parameter')}</th>
-                            <th className='px-4 py-2 font-medium'>{t('Description')}</th>
-                          </tr>
-                        </thead>
-                        <tbody className='divide-y'>
-                          {[
-                            ['app', 'claude / codex / gemini'],
-                            ['name', t('Provider display name in CC Switch')],
-                            ['endpoint', t('Codex requires /v1; other apps use the server address')],
-                            ['apiKey', t('Your LoveAPI key')],
-                            ['model', t('Optional primary model name')],
-                            [
-                              'homepage',
-                              t('Client homepage URL used for a follow-up redirect'),
-                            ],
-                          ].map(([k, v]) => (
-                            <tr key={k}>
-                              <td className='px-4 py-2'>
-                                <code className='bg-muted rounded px-1 text-xs'>
-                                  {k}
-                                </code>
-                              </td>
-                              <td className='text-muted-foreground px-4 py-2'>
-                                {v}
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
+                    <CodeBlock code={codexCcsUrl} lang='text' />
+                    <div className='rounded-lg border border-amber-200/70 bg-amber-50/70 p-3 text-xs leading-relaxed text-amber-700 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-300'>
+                      <strong>{t('Reference (codex config.toml)')}:</strong>{' '}
+                      {t('If your CC Switch version does not auto-apply the extraConfig, copy the full config below to')}{' '}
+                      <code className='bg-muted mx-1 rounded px-1'>~/.codex/config.toml</code>{' '}
+                      {t('and start with')}{' '}
+                      <code className='bg-muted mx-1 rounded px-1'>codex -p loveapi</code>.
                     </div>
+                    <CodeBlock code={codexConfigToml} lang='toml' />
                     <div className='mt-3'>
                       <CodexSubagentNote />
                     </div>
                   </Section>
 
+                  {/* 8. 一键接入 Claude Code */}
+                  <Section
+                    id='ccswitch-claude'
+                    icon=''
+                    title={t(SECTION_TITLES['ccswitch-claude'])}
+                  >
+                    <p className='text-muted-foreground text-sm leading-relaxed'>
+                      {t('One-click import Love API as a Claude Code provider via CC Switch')}
+                      ({t('for app=claude the endpoint uses the server address')}).{' '}
+                      {t('The deep link carries the full config; you do not need to copy a config file separately, and whichever model you pick is the one actually called.')}
+                    </p>
+                    <CodeBlock code={claudeCcsUrl} lang='text' />
+                    <div className='rounded-lg border border-amber-200/70 bg-amber-50/70 p-3 text-xs leading-relaxed text-amber-700 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-300'>
+                      <strong>{t('Reference (claude settings.json)')}:</strong>{' '}
+                      {t('If your CC Switch version does not auto-apply the extraConfig, copy the full config below to')}{' '}
+                      <code className='bg-muted mx-1 rounded px-1'>~/.claude/settings.json</code>.
+                    </div>
+                    <CodeBlock code={claudeSettingsJson} lang='json' />
+                  </Section>
+
                   {/* 8. 支持模型 */}
-                  <Section id='models' icon='🧠' title={t(SECTION_TITLES.models)}>
+                  <Section id='models' icon='' title={t(SECTION_TITLES.models)}>
                     <p className='text-muted-foreground text-sm leading-relaxed'>
                       {t('LoveAPI supports the following model families. Names follow upstream conventions and can be used directly in requests.')}
                     </p>
                     <h3 className='pt-2 text-base font-semibold'>
-                      🤖 {t('ChatGPT (Codex) family')}
+                       {t('ChatGPT (Codex) family')}
                     </h3>
                     <Card className='p-4'>
                       <div className='flex flex-wrap gap-2'>
@@ -786,7 +832,7 @@ model_provider = "loveapi"`}
                       </div>
                     </Card>
                     <h3 className='pt-2 text-base font-semibold'>
-                      🗣️ {t('Claude family')}
+                       {t('Claude family')}
                     </h3>
                     <Card className='p-4'>
                       <div className='flex flex-wrap gap-2'>
@@ -802,7 +848,7 @@ model_provider = "loveapi"`}
                         ))}
                       </div>
                     </Card>
-                    <h3 className='pt-2 text-base font-semibold'>🐋 {t('DeepSeek family')}</h3>
+                    <h3 className='pt-2 text-base font-semibold'> {t('DeepSeek family')}</h3>
                     <Card className='p-4'>
                       <div className='flex flex-wrap gap-2'>
                         {['deepseek-chat', 'deepseek-reasoner', 'deepseek-v3', 'deepseek-r1'].map(
@@ -815,7 +861,7 @@ model_provider = "loveapi"`}
                       </div>
                     </Card>
                     <h3 className='pt-2 text-base font-semibold'>
-                      💫 {t('Qwen family')}
+                       {t('Qwen family')}
                     </h3>
                     <Card className='p-4'>
                       <div className='flex flex-wrap gap-2'>
@@ -833,7 +879,7 @@ model_provider = "loveapi"`}
                   {/* 9. API 端点 */}
                   <Section
                     id='endpoints'
-                    icon='📡'
+                    icon=''
                     title={t(SECTION_TITLES.endpoints)}
                   >
                     <p className='text-muted-foreground text-sm'>
@@ -965,7 +1011,7 @@ model_provider = "loveapi"`}
                   {/* 10. 代码示例 */}
                   <Section
                     id='examples'
-                    icon='💻'
+                    icon=''
                     title={t(SECTION_TITLES.examples)}
                   >
                     <h3 className='text-sm font-semibold'>cURL</h3>
@@ -1001,7 +1047,7 @@ console.log(resp.choices[0].message.content);`}
                   {/* 11. 错误码 */}
                   <Section
                     id='errors'
-                    icon='⚠️'
+                    icon=''
                     title={t(SECTION_TITLES.errors)}
                   >
                     <div className='overflow-hidden rounded-lg border'>

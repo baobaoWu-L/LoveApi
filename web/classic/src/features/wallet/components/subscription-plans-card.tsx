@@ -64,6 +64,22 @@ interface SubscriptionPlansCardProps {
   onAvailabilityChange?: (available: boolean) => void
 }
 
+// tsToMs 将 unix 秒数字或 RFC3339 字符串转换为毫秒；无效值时返回 0。
+function tsToMs(value: number | string | null | undefined): number {
+  if (value == null || value === 0 || value === '') return 0
+  if (typeof value === 'string') {
+    const ms = Date.parse(value)
+    return Number.isNaN(ms) ? 0 : ms
+  }
+  return value * 1000
+}
+
+// tsToDate 将 unix 秒数字或 RFC3339 字符串转换为 Date；无效时返回 null。
+function tsToDate(value: number | string | null | undefined): Date | null {
+  const ms = tsToMs(value)
+  return ms > 0 ? new Date(ms) : null
+}
+
 function getEpayMethods(payMethods: PaymentMethod[] = []): PaymentMethod[] {
   return payMethods.filter(
     (m) => m?.type && m.type !== 'stripe' && m.type !== 'creem'
@@ -215,10 +231,9 @@ export function SubscriptionPlansCard({
   }, [plans])
 
   const getRemainingDays = (sub: UserSubscriptionRecord) => {
-    const endTime = sub?.subscription?.end_time || 0
-    if (!endTime) return 0
-    const now = Date.now() / 1000
-    return Math.max(0, Math.ceil((endTime - now) / 86400))
+    const endMs = tsToMs(sub?.subscription?.end_time)
+    if (!endMs) return 0
+    return Math.max(0, Math.ceil((endMs - Date.now()) / 86400000))
   }
 
   const getUsagePercent = (sub: UserSubscriptionRecord) => {
@@ -398,8 +413,8 @@ export function SubscriptionPlansCard({
                     planTitleMap.get(subscription?.plan_id) || ''
                   const remainDays = getRemainingDays(sub)
                   const usagePercent = getUsagePercent(sub)
-                  const now = Date.now() / 1000
-                  const isExpired = (subscription?.end_time || 0) < now
+                  const endMs = tsToMs(subscription?.end_time)
+                  const isExpired = endMs > 0 && endMs < Date.now()
                   const isCancelled = subscription?.status === 'cancelled'
                   const isActive =
                     subscription?.status === 'active' && !isExpired
@@ -450,18 +465,15 @@ export function SubscriptionPlansCard({
                           : isCancelled
                             ? t('Cancelled at')
                             : t('Expired at')}{' '}
-                        {new Date(
-                          (subscription?.end_time || 0) * 1000
-                        ).toLocaleString()}
+                        {tsToDate(subscription?.end_time)?.toLocaleString()}
                       </div>
-                      {isActive && (subscription?.next_reset_time ?? 0) > 0 && (
-                        <div className='text-muted-foreground mt-1'>
-                          {t('Next reset')}:{' '}
-                          {new Date(
-                            subscription!.next_reset_time! * 1000
-                          ).toLocaleString()}
-                        </div>
-                      )}
+                      {isActive &&
+                        tsToMs(subscription?.next_reset_time) > 0 && (
+                          <div className='text-muted-foreground mt-1'>
+                            {t('Next reset')}:{' '}
+                            {tsToDate(subscription?.next_reset_time)?.toLocaleString()}
+                          </div>
+                        )}
                       <div className='text-muted-foreground mt-1'>
                         {t('Total Quota')}:{' '}
                         {totalAmount > 0 ? (

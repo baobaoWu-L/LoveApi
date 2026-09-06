@@ -139,8 +139,8 @@ export function BalanceQueryDialog({
       abbreviate: false,
     })
 
-  const formatDate = (timestamp: number) => {
-    if (!timestamp) return 'Never'
+  const formatDate = (timestamp: number | string | null | undefined) => {
+    if (timestamp == null || timestamp === 0 || timestamp === '') return 'Never'
     return formatTimestampToDate(timestamp)
   }
 

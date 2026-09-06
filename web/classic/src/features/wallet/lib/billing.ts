@@ -78,6 +78,6 @@ export function getPaymentMethodName(
 /**
  * Format timestamp to readable date string
  */
-export function formatTimestamp(timestamp: number): string {
+export function formatTimestamp(timestamp: number | string): string {
   return formatTimestampToDate(timestamp)
 }

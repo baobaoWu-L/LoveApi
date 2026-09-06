@@ -25,13 +25,13 @@ import {
   HardDrive,
 } from 'lucide-react'
 import { formatBillingCurrencyFromUSD } from '@/lib/currency'
-import { formatLogQuota, formatTokens } from '@/lib/format'
+import { formatLogQuota, formatTimestampToDate, formatTokens } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import type { UsageLog } from '../data/schema'
 import { parseLogOther, getImageBilling } from '../lib/format'
-import type { LogOtherData } from '../types'
+import type { LogOtherData, MidjourneyLog, TaskLog } from '../types'
 import { ImageDialog } from './dialogs/image-dialog'
 
 // 与详情弹窗一致：图片经本地下载代理拉回，带 New-Api-User 头 + cookie，
@@ -98,6 +98,53 @@ async function downloadGeneratedImage(url: string): Promise<boolean> {
   }
 }
 
+// 生成计费过程计算式：如 (输入 1806 / 1M * 5.000000 + 缓存 88064 / 1M * 0.500000
+// + 输出 234 / 1M * 30.000000) * 分组倍率 0.3 = 0.018025。仅用平台数据，不暴露上游。
+function buildCostFormula(
+  t: (k: string) => string,
+  other: LogOtherData | null,
+  log: UsageLog,
+  promptTokens: number,
+  completionTokens: number,
+  cacheRead: number,
+  effectiveGroupRatio: number | null | undefined,
+  fmtPrice: (usd: number) => string
+): string {
+  const modelRatio = other?.model_ratio
+  const completionRatio = other?.completion_ratio
+  const cacheRatio = other?.cache_ratio
+  if (other?.model_price != null || modelRatio == null) {
+    // 按次计费或缺少倍率时，不生成公式
+    return ''
+  }
+  const baseInputUSD = modelRatio * 2.0
+  const inputPrice = baseInputUSD
+  const outputPrice = baseInputUSD * (completionRatio ?? 1)
+  const cachePrice = baseInputUSD * (cacheRatio ?? 1)
+  const parts: string[] = []
+  if (promptTokens > 0) {
+    parts.push(
+      `${t('Input')} ${promptTokens} / 1M * ${fmtPrice(inputPrice)}`
+    )
+  }
+  if (cacheRead > 0) {
+    parts.push(`${t('Cache Read')} ${cacheRead} / 1M * ${fmtPrice(cachePrice)}`)
+  }
+  if (completionTokens > 0) {
+    parts.push(
+      `${t('Output')} ${completionTokens} / 1M * ${fmtPrice(outputPrice)}`
+    )
+  }
+  if (parts.length === 0) return ''
+  const inner = parts.join(' + ')
+  const ratioPart =
+    effectiveGroupRatio != null && effectiveGroupRatio !== 1
+      ? ` * ${t('Group Ratio')} ${effectiveGroupRatio}`
+      : ''
+  const total = formatLogQuota(log.quota)
+  return `(${inner})${ratioPart} = ${total}`
+}
+
 function InlineRow(props: {
   label: string
   value: React.ReactNode
@@ -131,7 +178,6 @@ export function InlineLogDetails({ log }: { log: UsageLog }) {
 
   useEffect(() => {
     if (!generatedUrl) {
-      setImageDataUrl('')
       return
     }
     let cancelled = false
@@ -145,6 +191,7 @@ export function InlineLogDetails({ log }: { log: UsageLog }) {
 
   const priceOpts = { digitsLarge: 4, digitsSmall: 6, abbreviate: false }
   const fmtPrice = (usd: number) => formatBillingCurrencyFromUSD(usd, priceOpts)
+  const displayedImageDataUrl = generatedUrl ? imageDataUrl : ''
 
   const effectiveGroupRatio =
     other?.user_group_ratio != null && other.user_group_ratio !== -1
@@ -164,6 +211,13 @@ export function InlineLogDetails({ log }: { log: UsageLog }) {
       <div className='min-w-0 space-y-1'>
         {log.request_id && (
           <InlineRow label={t('Request ID')} value={log.request_id} mono />
+        )}
+        {shownOther?.request_path && (
+          <InlineRow
+            label={t('Request Path')}
+            value={shownOther.request_path}
+            mono
+          />
         )}
         <InlineRow
           label={t('Execution Mode')}
@@ -242,6 +296,15 @@ export function InlineLogDetails({ log }: { log: UsageLog }) {
               />
             )}
           </div>
+          {buildCostFormula(t, shownOther, log, promptTokens, completionTokens, cacheRead, effectiveGroupRatio, fmtPrice) && (
+            <div className='bg-muted/30 min-w-0 overflow-hidden rounded-md border p-2.5'>
+              <InlineRow
+                label={t('Billing Process')}
+                value={buildCostFormula(t, shownOther, log, promptTokens, completionTokens, cacheRead, effectiveGroupRatio, fmtPrice)}
+                mono
+              />
+            </div>
+          )}
         </div>
       )}
 
@@ -300,7 +363,7 @@ export function InlineLogDetails({ log }: { log: UsageLog }) {
           <div className='bg-muted/30 min-w-0 space-y-2 overflow-hidden rounded-md border p-2.5'>
             <div className='bg-muted/40 relative flex max-h-48 items-center justify-center overflow-hidden rounded-md border'>
               <img
-                src={imageDataUrl || imageProxyUrl(generatedUrl)}
+                src={displayedImageDataUrl || imageProxyUrl(generatedUrl)}
                 alt={t('Generated Image')}
                 className='max-h-48 w-full object-contain'
                 loading='lazy'
@@ -327,7 +390,7 @@ export function InlineLogDetails({ log }: { log: UsageLog }) {
                 onClick={() => {
                   setDownloading(true)
                   void downloadGeneratedImage(
-                    imageDataUrl || generatedUrl
+                    displayedImageDataUrl || generatedUrl
                   ).finally(() => setDownloading(false))
                 }}
               >
@@ -351,10 +414,142 @@ export function InlineLogDetails({ log }: { log: UsageLog }) {
       )}
 
       <ImageDialog
-        imageUrl={imageDataUrl || imageProxyUrl(generatedUrl)}
+        imageUrl={displayedImageDataUrl || imageProxyUrl(generatedUrl)}
         open={previewOpen}
         onOpenChange={setPreviewOpen}
       />
+    </div>
+  )
+}
+
+function RawInlineValue({ value }: { value?: string }) {
+  if (!value) return null
+
+  let displayValue = value
+  try {
+    displayValue = JSON.stringify(JSON.parse(value), null, 2)
+  } catch {
+    // Some task fields are plain text rather than JSON.
+  }
+
+  return (
+    <pre className='bg-muted/30 max-h-64 overflow-auto rounded-md border p-2.5 text-xs break-all whitespace-pre-wrap'>
+      {displayValue}
+    </pre>
+  )
+}
+
+export function InlineDrawingLogDetails({ log }: { log: MidjourneyLog }) {
+  const { t } = useTranslation()
+
+  return (
+    <div className='w-full min-w-0 space-y-3 px-4 py-3'>
+      <div className='min-w-0 space-y-1'>
+        <InlineRow label={t('Task ID')} value={log.mj_id || '-'} mono />
+        <InlineRow label={t('Type')} value={log.action || '-'} />
+        <InlineRow label={t('Status')} value={log.status || '-'} />
+        <InlineRow
+          label={t('Submit Time')}
+          value={formatTimestampToDate(log.submit_time, 'milliseconds')}
+          mono
+        />
+        {log.finish_time && (
+          <InlineRow
+            label={t('Finish Time')}
+            value={formatTimestampToDate(log.finish_time, 'milliseconds')}
+            mono
+          />
+        )}
+        {log.progress && <InlineRow label={t('Progress')} value={log.progress} />}
+      </div>
+
+      {log.prompt && (
+        <div className='min-w-0 space-y-1.5'>
+          <Label className='text-xs font-semibold'>{t('Prompt')}</Label>
+          <div className='bg-muted/30 rounded-md border p-2.5 text-xs break-all whitespace-pre-wrap'>
+            {log.prompt}
+          </div>
+        </div>
+      )}
+
+      {log.description && (
+        <InlineRow label={t('Description')} value={log.description} />
+      )}
+      {log.buttons && (
+        <div className='space-y-1.5'>
+          <Label className='text-xs font-semibold'>{t('Buttons')}</Label>
+          <RawInlineValue value={log.buttons} />
+        </div>
+      )}
+      {log.fail_reason && (
+        <div className='space-y-1.5'>
+          <Label className='text-xs font-semibold'>{t('Fail Reason')}</Label>
+          <div className='rounded-md border border-rose-200 bg-rose-50/50 p-2.5 text-xs break-all whitespace-pre-wrap dark:border-rose-900 dark:bg-rose-950/20'>
+            {log.fail_reason}
+          </div>
+        </div>
+      )}
+      {log.other && (
+        <div className='space-y-1.5'>
+          <Label className='text-xs font-semibold'>{t('Additional Data')}</Label>
+          <RawInlineValue value={log.other} />
+        </div>
+      )}
+    </div>
+  )
+}
+
+export function InlineTaskLogDetails({ log }: { log: TaskLog }) {
+  const { t } = useTranslation()
+
+  return (
+    <div className='w-full min-w-0 space-y-3 px-4 py-3'>
+      <div className='min-w-0 space-y-1'>
+        <InlineRow label={t('Task ID')} value={log.task_id || '-'} mono />
+        <InlineRow label={t('Platform')} value={log.platform || '-'} />
+        <InlineRow label={t('Action')} value={log.action || '-'} />
+        <InlineRow label={t('Status')} value={log.status || '-'} />
+        <InlineRow
+          label={t('Submit Time')}
+          value={formatTimestampToDate(log.submit_time, 'seconds')}
+          mono
+        />
+        {log.finish_time && (
+          <InlineRow
+            label={t('Finish Time')}
+            value={formatTimestampToDate(log.finish_time, 'seconds')}
+            mono
+          />
+        )}
+        {log.progress && <InlineRow label={t('Progress')} value={log.progress} />}
+        {log.progress_message_en && (
+          <InlineRow
+            label={t('Progress Message')}
+            value={log.progress_message_en}
+          />
+        )}
+      </div>
+
+      {log.fail_reason && (
+        <div className='space-y-1.5'>
+          <Label className='text-xs font-semibold'>{t('Fail Reason')}</Label>
+          <div className='rounded-md border border-rose-200 bg-rose-50/50 p-2.5 text-xs break-all whitespace-pre-wrap dark:border-rose-900 dark:bg-rose-950/20'>
+            {log.fail_reason}
+          </div>
+        </div>
+      )}
+      {log.data && (
+        <div className='space-y-1.5'>
+          <Label className='text-xs font-semibold'>{t('Task Data')}</Label>
+          <RawInlineValue value={log.data} />
+        </div>
+      )}
+      {log.other && (
+        <div className='space-y-1.5'>
+          <Label className='text-xs font-semibold'>{t('Additional Data')}</Label>
+          <RawInlineValue value={log.other} />
+        </div>
+      )}
     </div>
   )
 }

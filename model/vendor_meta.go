@@ -1,7 +1,7 @@
 package model
 
 import (
-	"github.com/QuantumNous/new-api/common"
+	"time"
 
 	"gorm.io/gorm"
 )
@@ -18,14 +18,14 @@ type Vendor struct {
 	Description string         `json:"description,omitempty" gorm:"type:text"`
 	Icon        string         `json:"icon,omitempty" gorm:"type:varchar(128)"`
 	Status      int            `json:"status" gorm:"default:1"`
-	CreatedTime int64          `json:"created_time" gorm:"bigint"`
-	UpdatedTime int64          `json:"updated_time" gorm:"bigint"`
+	CreatedTime time.Time `json:"created_time" gorm:"column:created_time"`
+	UpdatedTime time.Time `json:"updated_time" gorm:"column:updated_time"`
 	DeletedAt   gorm.DeletedAt `json:"-" gorm:"index;uniqueIndex:uk_vendor_name_delete_at,priority:2"`
 }
 
 // Insert 创建新的供应商记录
 func (v *Vendor) Insert() error {
-	now := common.GetTimestamp()
+	now := time.Now()
 	v.CreatedTime = now
 	v.UpdatedTime = now
 	return DB.Create(v).Error
@@ -43,7 +43,7 @@ func IsVendorNameDuplicated(id int, name string) (bool, error) {
 
 // Update 更新供应商记录
 func (v *Vendor) Update() error {
-	v.UpdatedTime = common.GetTimestamp()
+	v.UpdatedTime = time.Now()
 	return DB.Save(v).Error
 }
 

@@ -77,9 +77,10 @@ export function transformFormDataToPayload(
   return {
     name: data.name,
     quota: parseQuotaFromDollars(data.quota_dollars),
+    // expired_time 兼容两种格式：数字(unix 秒) 或 RFC3339 字符串；空表示不过期
     expired_time: data.expired_time
-      ? Math.floor(data.expired_time.getTime() / 1000)
-      : 0,
+      ? data.expired_time.toISOString()
+      : null,
     count: data.count || 1,
   }
 }
@@ -93,10 +94,22 @@ export function transformRedemptionToFormDefaults(
   return {
     name: redemption.name,
     quota_dollars: quotaUnitsToDollars(redemption.quota),
-    expired_time:
-      redemption.expired_time > 0
-        ? new Date(redemption.expired_time * 1000)
-        : undefined,
+    expired_time: toDate(redemption.expired_time),
     count: 1,
   }
+}
+
+/**
+ * Parses an RFC3339 string or unix-seconds number into a Date, or undefined
+ * when the value is absent / null / 0 (never expires).
+ */
+function toDate(
+  value: number | string | null | undefined
+): Date | undefined {
+  if (value == null || value === 0 || value === '') return undefined
+  if (typeof value === 'number') {
+    return value > 0 ? new Date(value * 1000) : undefined
+  }
+  const d = new Date(value)
+  return Number.isNaN(d.getTime()) ? undefined : d
 }

@@ -80,9 +80,8 @@ export function transformFormDataToPayload(
     remain_quota: data.unlimited_quota
       ? 0
       : parseQuotaFromDollars(data.remain_quota_dollars || 0),
-    expired_time: data.expired_time
-      ? Math.floor(data.expired_time.getTime() / 1000)
-      : -1,
+    // expired_time 兼容两种格式：unix 秒数字或 RFC3339 字符串；空表示永不过期
+    expired_time: data.expired_time ? data.expired_time.toISOString() : null,
     unlimited_quota: data.unlimited_quota,
     model_limits_enabled: data.model_limits.length > 0,
     model_limits: data.model_limits.join(','),
@@ -101,10 +100,7 @@ export function transformApiKeyToFormDefaults(
   return {
     name: apiKey.name,
     remain_quota_dollars: quotaUnitsToDollars(apiKey.remain_quota),
-    expired_time:
-      apiKey.expired_time > 0
-        ? new Date(apiKey.expired_time * 1000)
-        : undefined,
+    expired_time: toDate(apiKey.expired_time),
     unlimited_quota: apiKey.unlimited_quota,
     model_limits: apiKey.model_limits
       ? apiKey.model_limits.split(',').filter(Boolean)
@@ -114,4 +110,16 @@ export function transformApiKeyToFormDefaults(
     cross_group_retry: !!apiKey.cross_group_retry,
     tokenCount: 1,
   }
+}
+
+/**
+ * 将 RFC3339 字符串或 unix 秒数字解析为 Date，值为空/null/负数时返回 undefined。
+ */
+function toDate(value: number | string | null | undefined): Date | undefined {
+  if (value == null || value === '' || value === -1) return undefined
+  if (typeof value === 'number') {
+    return value > 0 ? new Date(value * 1000) : undefined
+  }
+  const d = new Date(value)
+  return Number.isNaN(d.getTime()) ? undefined : d
 }

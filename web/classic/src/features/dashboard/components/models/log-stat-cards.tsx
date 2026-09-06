@@ -21,7 +21,11 @@ import { useAuthStore } from '@/stores/auth-store'
 import { formatNumber, formatQuota } from '@/lib/format'
 import { computeTimeRange } from '@/lib/time'
 import { Skeleton } from '@/components/ui/skeleton'
-import { getUserQuotaDates } from '@/features/dashboard/api'
+import {
+  getAllUserQuotaDates,
+  getCurrentYearQuotaDates,
+  getUserQuotaDates,
+} from '@/features/dashboard/api'
 import { useModelStatCardsConfig } from '@/features/dashboard/hooks/use-dashboard-config'
 import {
   buildQueryParams,
@@ -36,6 +40,7 @@ import type {
 interface LogStatCardsProps {
   filters?: DashboardFilters
   onDataUpdate?: (data: QuotaDataItem[], loading: boolean) => void
+  onHeatmapDataUpdate?: (data: QuotaDataItem[]) => void
 }
 
 export function LogStatCards(props: LogStatCardsProps) {
@@ -52,7 +57,7 @@ export function LogStatCards(props: LogStatCardsProps) {
 
   const [timeRangeMinutes, setTimeRangeMinutes] = useState(0)
 
-  const { filters, onDataUpdate } = props
+  const { filters, onDataUpdate, onHeatmapDataUpdate } = props
 
   useEffect(() => {
     const abortController = new AbortController()
@@ -61,6 +66,7 @@ export function LogStatCards(props: LogStatCardsProps) {
 
     setError(false)
     onDataUpdate?.([], true)
+    onHeatmapDataUpdate?.([])
 
     const timeRange = computeTimeRange(
       getDefaultDays(filters?.time_granularity),
@@ -70,7 +76,13 @@ export function LogStatCards(props: LogStatCardsProps) {
     const timeDiff = (timeRange.end_timestamp - timeRange.start_timestamp) / 60
     setTimeRangeMinutes(timeDiff)
 
-    getUserQuotaDates(buildQueryParams(timeRange, filters), isAdmin)
+    const hasCustomTimeRange =
+      filters?.start_timestamp != null || filters?.end_timestamp != null
+    const chartRequest = hasCustomTimeRange
+      ? getUserQuotaDates(buildQueryParams(timeRange, filters), isAdmin)
+      : getAllUserQuotaDates({ username: filters?.username }, isAdmin)
+
+    chartRequest
       .then((res) => {
         if (abortController.signal.aborted) return
         const data = res?.data || []
@@ -83,6 +95,16 @@ export function LogStatCards(props: LogStatCardsProps) {
         setError(true)
         onDataUpdate?.([], false)
       })
+
+    getCurrentYearQuotaDates(isAdmin)
+      .then((res) => {
+        if (abortController.signal.aborted) return
+        onHeatmapDataUpdate?.(res?.data || [])
+      })
+      .catch(() => {
+        if (abortController.signal.aborted) return
+        onHeatmapDataUpdate?.([])
+      })
       .finally(() => {
         if (!abortController.signal.aborted) {
           setLoading(false)
@@ -92,7 +114,7 @@ export function LogStatCards(props: LogStatCardsProps) {
     return () => {
       abortController.abort()
     }
-  }, [filters, isAdmin, onDataUpdate])
+  }, [filters, isAdmin, onDataUpdate, onHeatmapDataUpdate])
 
   const adaptedStats = {
     rpm: stats?.totalCount ?? 0,

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/dto"
@@ -53,8 +54,8 @@ type User struct {
 	Setting            string         `json:"setting" gorm:"type:text;column:setting"`
 	Remark             string         `json:"remark,omitempty" gorm:"type:varchar(255)" validate:"max=255"`
 	StripeCustomer     string         `json:"stripe_customer" gorm:"type:varchar(64);column:stripe_customer;index"`
-	CreatedAt          int64          `json:"created_at" gorm:"autoCreateTime;column:created_at"`
-	LastLoginAt        int64          `json:"last_login_at" gorm:"default:0;column:last_login_at"`
+	CreatedAt          time.Time      `json:"created_at" gorm:"autoCreateTime;column:created_at"`
+	LastLoginAt        *time.Time     `json:"last_login_at" gorm:"type:datetime;default:null;column:last_login_at"`
 }
 
 func normalizeNewUserGroup(group string) string {
@@ -970,7 +971,7 @@ func GetRootUser() (user *User) {
 }
 
 func UpdateUserLastLoginAt(id int) {
-	if err := DB.Model(&User{}).Where("id = ?", id).Update("last_login_at", common.GetTimestamp()).Error; err != nil {
+	if err := DB.Model(&User{}).Where("id = ?", id).Update("last_login_at", time.Now()).Error; err != nil {
 		common.SysLog("failed to update user last_login_at: " + err.Error())
 	}
 }

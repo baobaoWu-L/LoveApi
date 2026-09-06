@@ -18,27 +18,27 @@ import (
 )
 
 type Log struct {
-	Id                int    `json:"id" gorm:"index:idx_created_at_id,priority:1;index:idx_user_id_id,priority:2"`
-	UserId            int    `json:"user_id" gorm:"index;index:idx_user_id_id,priority:1"`
-	CreatedAt         int64  `json:"created_at" gorm:"bigint;index:idx_created_at_id,priority:2;index:idx_created_at_type"`
-	Type              int    `json:"type" gorm:"index:idx_created_at_type"`
-	Content           string `json:"content"`
-	Username          string `json:"username" gorm:"index;index:index_username_model_name,priority:2;default:''"`
-	TokenName         string `json:"token_name" gorm:"index;default:''"`
-	ModelName         string `json:"model_name" gorm:"index;index:index_username_model_name,priority:1;default:''"`
-	Quota             int    `json:"quota" gorm:"default:0"`
-	PromptTokens      int    `json:"prompt_tokens" gorm:"default:0"`
-	CompletionTokens  int    `json:"completion_tokens" gorm:"default:0"`
-	UseTime           int    `json:"use_time" gorm:"default:0"`
-	IsStream          bool   `json:"is_stream"`
-	ChannelId         int    `json:"channel" gorm:"index"`
-	ChannelName       string `json:"channel_name" gorm:"->"`
-	TokenId           int    `json:"token_id" gorm:"default:0;index"`
-	Group             string `json:"group" gorm:"index"`
-	Ip                string `json:"ip" gorm:"index;default:''"`
-	RequestId         string `json:"request_id,omitempty" gorm:"type:varchar(64);index:idx_logs_request_id;default:''"`
-	UpstreamRequestId string `json:"upstream_request_id,omitempty" gorm:"type:varchar(128);index:idx_logs_upstream_request_id;default:''"`
-	Other             string `json:"other"`
+	Id                int       `json:"id" gorm:"index:idx_created_at_id,priority:1;index:idx_user_id_id,priority:2"`
+	UserId            int       `json:"user_id" gorm:"index;index:idx_user_id_id,priority:1"`
+	CreatedAt         time.Time `json:"created_at" gorm:"index:idx_created_at_id,priority:2;index:idx_created_at_type"`
+	Type              int       `json:"type" gorm:"index:idx_created_at_type"`
+	Content           string    `json:"content"`
+	Username          string    `json:"username" gorm:"index;index:index_username_model_name,priority:2;default:''"`
+	TokenName         string    `json:"token_name" gorm:"index;default:''"`
+	ModelName         string    `json:"model_name" gorm:"index;index:index_username_model_name,priority:1;default:''"`
+	Quota             int       `json:"quota" gorm:"default:0"`
+	PromptTokens      int       `json:"prompt_tokens" gorm:"default:0"`
+	CompletionTokens  int       `json:"completion_tokens" gorm:"default:0"`
+	UseTime           int       `json:"use_time" gorm:"default:0"`
+	IsStream          bool      `json:"is_stream"`
+	ChannelId         int       `json:"channel" gorm:"index"`
+	ChannelName       string    `json:"channel_name" gorm:"->"`
+	TokenId           int       `json:"token_id" gorm:"default:0;index"`
+	Group             string    `json:"group" gorm:"index"`
+	Ip                string    `json:"ip" gorm:"index;default:''"`
+	RequestId         string    `json:"request_id,omitempty" gorm:"type:varchar(64);index:idx_logs_request_id;default:''"`
+	UpstreamRequestId string    `json:"upstream_request_id,omitempty" gorm:"type:varchar(128);index:idx_logs_upstream_request_id;default:''"`
+	Other             string    `json:"other"`
 }
 
 var sensitiveUsageKeys = map[string]struct{}{
@@ -46,6 +46,11 @@ var sensitiveUsageKeys = map[string]struct{}{
 	"content": {}, "input": {}, "output": {}, "data": {},
 	"response": {}, "result": {}, "image": {}, "image_url": {},
 	"video": {}, "video_url": {}, "file": {}, "files": {},
+	// Provider-specific identifiers and retry metadata are never exposed in
+	// usage-log responses. Keep only the local request/model/billing fields.
+	"upstream_model_name": {}, "upstream_request_id": {}, "request_conversion": {},
+	"channel_affinity": {}, "generated_image_url": {}, "image_generated_url": {},
+	"upstream_task_id": {},
 }
 
 func sanitizeUsageOther(value map[string]interface{}) map[string]interface{} {
@@ -82,6 +87,16 @@ func sanitizeUsageValue(value interface{}) (interface{}, bool) {
 	}
 }
 
+// SanitizeLogOtherForClient removes prompt/content payloads and provider-only
+// metadata from a persisted Other JSON value before it is sent to the UI.
+func SanitizeLogOtherForClient(value string) string {
+	otherMap, err := common.StrToMap(value)
+	if err != nil {
+		return ""
+	}
+	return common.MapToJsonStr(sanitizeUsageOther(otherMap))
+}
+
 // don't use iota, avoid change log type value
 const (
 	LogTypeUnknown = 0
@@ -104,7 +119,7 @@ func formatUserLogs(logs []*Log, startIdx int) {
 			// delete(otherMap, "reject_reason")
 			delete(otherMap, "stream_status")
 		}
-		logs[i].Other = common.MapToJsonStr(otherMap)
+		logs[i].Other = common.MapToJsonStr(sanitizeUsageOther(otherMap))
 		logs[i].Id = startIdx + i + 1
 	}
 }
@@ -123,7 +138,7 @@ func RecordLog(userId int, logType int, content string) {
 	log := &Log{
 		UserId:    userId,
 		Username:  username,
-		CreatedAt: common.GetTimestamp(),
+		CreatedAt: time.Now(),
 		Type:      logType,
 		Content:   content,
 	}
@@ -142,7 +157,7 @@ func RecordLogWithAdminInfo(userId int, logType int, content string, adminInfo m
 	log := &Log{
 		UserId:    userId,
 		Username:  username,
-		CreatedAt: common.GetTimestamp(),
+		CreatedAt: time.Now(),
 		Type:      logType,
 		Content:   content,
 	}
@@ -173,7 +188,7 @@ func RecordTopupLog(userId int, content string, callerIp string, paymentMethod s
 	log := &Log{
 		UserId:    userId,
 		Username:  username,
-		CreatedAt: common.GetTimestamp(),
+		CreatedAt: time.Now(),
 		Type:      LogTypeTopup,
 		Content:   content,
 		Ip:        callerIp,
@@ -202,7 +217,7 @@ func RecordErrorLog(c *gin.Context, userId int, channelId int, modelName string,
 	log := &Log{
 		UserId:           userId,
 		Username:         username,
-		CreatedAt:        common.GetTimestamp(),
+		CreatedAt:        time.Now(),
 		Type:             LogTypeError,
 		Content:          "",
 		PromptTokens:     0,
@@ -265,7 +280,7 @@ func RecordConsumeLog(c *gin.Context, userId int, params RecordConsumeLogParams)
 	log := &Log{
 		UserId:           userId,
 		Username:         username,
-		CreatedAt:        common.GetTimestamp(),
+		CreatedAt:        time.Now(),
 		Type:             LogTypeConsume,
 		Content:          "",
 		PromptTokens:     params.PromptTokens,
@@ -294,7 +309,7 @@ func RecordConsumeLog(c *gin.Context, userId int, params RecordConsumeLogParams)
 	}
 	if common.DataExportEnabled {
 		gopool.Go(func() {
-			LogQuotaData(userId, username, params.ModelName, params.Quota, common.GetTimestamp(), params.PromptTokens+params.CompletionTokens)
+			LogQuotaData(userId, username, params.ModelName, params.Quota, time.Now(), params.PromptTokens+params.CompletionTokens)
 		})
 	}
 }
@@ -325,7 +340,7 @@ func RecordTaskBillingLog(params RecordTaskBillingLogParams) {
 	log := &Log{
 		UserId:    params.UserId,
 		Username:  username,
-		CreatedAt: common.GetTimestamp(),
+		CreatedAt: time.Now(),
 		Type:      params.LogType,
 		Content:   "",
 		TokenName: tokenName,
@@ -366,10 +381,10 @@ func GetAllLogs(logType int, startTimestamp int64, endTimestamp int64, modelName
 		tx = tx.Where("logs.upstream_request_id = ?", upstreamRequestId)
 	}
 	if startTimestamp != 0 {
-		tx = tx.Where("logs.created_at >= ?", startTimestamp)
+		tx = tx.Where("logs.created_at >= ?", time.Unix(startTimestamp, 0))
 	}
 	if endTimestamp != 0 {
-		tx = tx.Where("logs.created_at <= ?", endTimestamp)
+		tx = tx.Where("logs.created_at <= ?", time.Unix(endTimestamp, 0))
 	}
 	if channel != 0 {
 		tx = tx.Where("logs.channel_id = ?", channel)
@@ -456,10 +471,10 @@ func GetUserLogs(userId int, logType int, startTimestamp int64, endTimestamp int
 		tx = tx.Where("logs.upstream_request_id = ?", upstreamRequestId)
 	}
 	if startTimestamp != 0 {
-		tx = tx.Where("logs.created_at >= ?", startTimestamp)
+		tx = tx.Where("logs.created_at >= ?", time.Unix(startTimestamp, 0))
 	}
 	if endTimestamp != 0 {
-		tx = tx.Where("logs.created_at <= ?", endTimestamp)
+		tx = tx.Where("logs.created_at <= ?", time.Unix(endTimestamp, 0))
 	}
 	if group != "" {
 		tx = tx.Where("logs."+logGroupCol+" = ?", group)
@@ -500,10 +515,10 @@ func SumUsedQuota(logType int, startTimestamp int64, endTimestamp int64, modelNa
 		rpmTpmQuery = rpmTpmQuery.Where("token_name = ?", tokenName)
 	}
 	if startTimestamp != 0 {
-		tx = tx.Where("created_at >= ?", startTimestamp)
+		tx = tx.Where("created_at >= ?", time.Unix(startTimestamp, 0))
 	}
 	if endTimestamp != 0 {
-		tx = tx.Where("created_at <= ?", endTimestamp)
+		tx = tx.Where("created_at <= ?", time.Unix(endTimestamp, 0))
 	}
 	if modelName != "" {
 		modelNamePattern, err := sanitizeLikePattern(modelName)
@@ -526,7 +541,7 @@ func SumUsedQuota(logType int, startTimestamp int64, endTimestamp int64, modelNa
 	rpmTpmQuery = rpmTpmQuery.Where("type = ?", LogTypeConsume)
 
 	// 只统计最近60秒的rpm和tpm
-	rpmTpmQuery = rpmTpmQuery.Where("created_at >= ?", time.Now().Add(-60*time.Second).Unix())
+	rpmTpmQuery = rpmTpmQuery.Where("created_at >= ?", time.Now().Add(-60*time.Second))
 
 	// 执行查询
 	if err := tx.Scan(&stat).Error; err != nil {
@@ -550,10 +565,10 @@ func SumUsedToken(logType int, startTimestamp int64, endTimestamp int64, modelNa
 		tx = tx.Where("token_name = ?", tokenName)
 	}
 	if startTimestamp != 0 {
-		tx = tx.Where("created_at >= ?", startTimestamp)
+		tx = tx.Where("created_at >= ?", time.Unix(startTimestamp, 0))
 	}
 	if endTimestamp != 0 {
-		tx = tx.Where("created_at <= ?", endTimestamp)
+		tx = tx.Where("created_at <= ?", time.Unix(endTimestamp, 0))
 	}
 	if modelName != "" {
 		tx = tx.Where("model_name = ?", modelName)
@@ -570,7 +585,7 @@ func DeleteOldLog(ctx context.Context, targetTimestamp int64, limit int) (int64,
 			return total, ctx.Err()
 		}
 
-		result := LOG_DB.Where("created_at < ?", targetTimestamp).Limit(limit).Delete(&Log{})
+		result := LOG_DB.Where("created_at < ?", time.Unix(targetTimestamp, 0)).Limit(limit).Delete(&Log{})
 		if nil != result.Error {
 			return total, result.Error
 		}

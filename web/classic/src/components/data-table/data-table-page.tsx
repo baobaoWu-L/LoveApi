@@ -121,6 +121,11 @@ export type DataTablePageProps<TData> = {
   mobileProps?: {
     getRowKey?: (row: Row<TData>) => string | number
     getRowClassName?: (row: Row<TData>) => string | undefined
+    onRowClick?: (
+      row: Row<TData>,
+      event: React.MouseEvent<HTMLDivElement>
+    ) => void
+    renderExpandedRow?: (row: Row<TData>) => React.ReactNode
   }
 
   /**
@@ -287,6 +292,8 @@ function renderMobile<TData>(
       emptyDescription={props.emptyDescription}
       getRowKey={props.mobileProps?.getRowKey}
       getRowClassName={mobileGetRowClassName}
+      onRowClick={props.mobileProps?.onRowClick}
+      renderExpandedRow={props.mobileProps?.renderExpandedRow}
     />
   )
 }

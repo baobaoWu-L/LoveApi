@@ -76,10 +76,10 @@ export function isPerCallBilling(modelPrice?: number): boolean {
  * Get default time range (today 00:00:00 to now + 1 hour)
  */
 export function getDefaultTimeRange(): { start: Date; end: Date } {
+  // 默认展示全部日志（最早→现在），需要时再用时间筛选
   const now = new Date()
-  const start = new Date(now)
-  start.setHours(0, 0, 0, 0)
-  const end = new Date(now.getTime() + 3600 * 1000) // +1 hour
+  const start = new Date(0)
+  const end = now
 
   return { start, end }
 }
@@ -87,7 +87,11 @@ export function getDefaultTimeRange(): { start: Date; end: Date } {
 /**
  * Convert milliseconds timestamp to seconds for API
  */
-function timestampToSeconds(ms: number): number {
+function timestampToSeconds(ms: number | string): number {
+  if (typeof ms === 'string') {
+    const t = Date.parse(ms)
+    return Number.isNaN(t) ? 0 : Math.floor(t / 1000)
+  }
   return Math.floor(ms / 1000)
 }
 

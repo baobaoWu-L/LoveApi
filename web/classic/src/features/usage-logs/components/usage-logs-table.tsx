@@ -16,12 +16,19 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { Fragment, useEffect, useState } from 'react'
+import {
+  Fragment,
+  useEffect,
+  useState,
+  type MouseEvent,
+  type ReactNode,
+} from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { getRouteApi } from '@tanstack/react-router'
 import {
   type ColumnDef,
   type ExpandedState,
+  type Row,
   flexRender,
   getCoreRowModel,
   getExpandedRowModel,
@@ -38,12 +45,21 @@ import { cn } from '@/lib/utils'
 import { useIsAdmin } from '@/hooks/use-admin'
 import { useTableUrlState } from '@/hooks/use-table-url-state'
 import { TableCell, TableRow } from '@/components/ui/table'
-import { InlineLogDetails } from './inline-log-details'
+import {
+  InlineDrawingLogDetails,
+  InlineLogDetails,
+  InlineTaskLogDetails,
+} from './inline-log-details'
+import { ErrorBoundary } from '@/components/error-boundary'
 import { DataTablePage } from '@/components/data-table'
 import { DEFAULT_LOGS_DATA, LOG_TYPE_ENUM } from '../constants'
 import { useColumnsByCategory } from '../lib/columns'
 import { fetchLogsByCategory } from '../lib/utils'
-import type { LogCategory } from '../types'
+import type {
+  LogCategory,
+  MidjourneyLog,
+  TaskLog,
+} from '../types'
 import type { UsageLog } from '../data/schema'
 import { CommonLogsFilterBar } from './common-logs-filter-bar'
 import { TaskLogsFilterBar } from './task-logs-filter-bar'
@@ -169,6 +185,37 @@ export function UsageLogsTable({ logCategory }: UsageLogsTableProps) {
 
   const isCommon = logCategory === 'common'
 
+  const handleRowClick = (
+    row: Row<Record<string, unknown>>,
+    event: MouseEvent<HTMLElement>
+  ) => {
+    const target = event.target as HTMLElement
+    if (target.closest('button,a,input,select,textarea,[role="button"]')) {
+      return
+    }
+    row.toggleExpanded()
+  }
+
+  const renderExpandedDetails = (row: Row<Record<string, unknown>>): ReactNode => {
+    if (!row.getIsExpanded()) return null
+
+    const original = row.original as Record<string, unknown>
+    let details: ReactNode
+    if (logCategory === 'common') {
+      details = (
+        <InlineLogDetails log={original as unknown as UsageLog} />
+      )
+    } else if (logCategory === 'drawing') {
+      details = (
+        <InlineDrawingLogDetails log={original as unknown as MidjourneyLog} />
+      )
+    } else {
+      details = <InlineTaskLogDetails log={original as unknown as TaskLog} />
+    }
+
+    return details
+  }
+
   return (
     <DataTablePage
       table={table}
@@ -182,6 +229,18 @@ export function UsageLogsTable({ logCategory }: UsageLogsTableProps) {
       skeletonKeyPrefix='usage-log-skeleton'
       tableClassName='max-h-[calc(100dvh-13rem)] overflow-auto sm:max-h-[calc(100dvh-14rem)]'
       tableHeaderClassName='bg-muted/30 sticky top-0 z-10'
+      mobileProps={{
+        onRowClick: (row, event) => handleRowClick(row, event),
+        renderExpandedRow: (row) => {
+          const details = renderExpandedDetails(row)
+          if (!details) return null
+          return (
+            <div className='bg-muted/30 mt-2 rounded-md border'>
+              <ErrorBoundary>{details}</ErrorBoundary>
+            </div>
+          )
+        },
+      }}
       toolbar={
         isCommon ? (
           <CommonLogsFilterBar table={table} />
@@ -195,24 +254,12 @@ export function UsageLogsTable({ logCategory }: UsageLogsTableProps) {
           | undefined
         const tintClass =
           isCommon && logType != null ? (logTypeRowTint[logType] ?? '') : ''
-        // 行内展开仅用于通用日志；绘图/任务日志保持原单行渲染，避免类型不匹配。
-        if (!isCommon) {
-          return (
-            <TableRow key={row.id} className={cn('transition-colors', tintClass)}>
-              {row.getVisibleCells().map((cell) => (
-                <TableCell key={cell.id} className='py-3.5'>
-                  {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                </TableCell>
-              ))}
-            </TableRow>
-          )
-        }
         const isExpanded = row.getIsExpanded()
 
         return (
           <Fragment key={row.id}>
             <TableRow
-              onClick={row.getToggleExpandedHandler()}
+              onClick={(event) => handleRowClick(row, event)}
               className={cn(
                 'cursor-pointer transition-colors',
                 tintClass,
@@ -228,9 +275,7 @@ export function UsageLogsTable({ logCategory }: UsageLogsTableProps) {
             {isExpanded && (
               <TableRow className='bg-muted/30'>
                 <TableCell colSpan={row.getVisibleCells().length} className='p-0'>
-                  <InlineLogDetails
-                    log={row.original as unknown as UsageLog}
-                  />
+                  <ErrorBoundary>{renderExpandedDetails(row)}</ErrorBoundary>
                 </TableCell>
               </TableRow>
             )}

@@ -97,7 +97,7 @@ func CheckSetup() {
 			// Create setup record
 			newSetup := Setup{
 				Version:       common.Version,
-				InitializedAt: time.Now().Unix(),
+				InitializedAt: time.Now(),
 			}
 			err := DB.Create(&newSetup).Error
 			if err != nil {
@@ -110,7 +110,7 @@ func CheckSetup() {
 		}
 	} else {
 		// Setup record exists, system is initialized
-		common.SysLog("system is already initialized at: " + time.Unix(setup.InitializedAt, 0).String())
+		common.SysLog("system is already initialized at: " + setup.InitializedAt.String())
 		constant.Setup = true
 	}
 }

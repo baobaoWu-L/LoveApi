@@ -27,6 +27,23 @@ import dayjs from '@/lib/dayjs'
 export type TimeGranularity = 'hour' | 'day' | 'week'
 
 /**
+ * Normalize a raw timestamp (numeric seconds/millis or RFC3339 string) to
+ * epoch milliseconds, or null for empty/sentinel values. Backend time fields
+ * are migrating from unix integers to DATETIME strings.
+ */
+function toMs(
+  value?: number | string,
+  unit: 'seconds' | 'milliseconds' = 'seconds'
+): number | null {
+  if (value == null || value === '' || value === -1 || value === 0) return null
+  if (typeof value === 'string') {
+    const ms = Date.parse(value)
+    return Number.isNaN(ms) ? null : ms
+  }
+  return unit === 'seconds' ? value * 1000 : value
+}
+
+/**
  * Convert Date object to Unix timestamp (seconds)
  */
 export function dateToUnixTimestamp(date: Date): number {
@@ -142,8 +159,9 @@ export function computeTimeRange(
 /**
  * Format Unix timestamp (seconds) to YYYY-MM-DD
  */
-export function formatDate(tsSec: number): string {
-  return dayjs(tsSec * 1000).format('YYYY-MM-DD')
+export function formatDate(tsSec?: number | string): string {
+  const ms = toMs(tsSec, 'seconds')
+  return ms == null ? '' : dayjs(ms).format('YYYY-MM-DD')
 }
 
 /**
@@ -160,10 +178,12 @@ export function formatDateTimeObject(date: Date): string {
  * @returns Formatted string suitable for chart axis
  */
 export function formatChartTime(
-  timestamp: number,
+  timestamp?: number | string,
   granularity: TimeGranularity = 'day'
 ): string {
-  const d = dayjs(timestamp * 1000)
+  const ms = toMs(timestamp, 'seconds')
+  if (ms == null) return ''
+  const d = dayjs(ms)
   let result = d.format('MM-DD')
 
   if (granularity === 'hour') {

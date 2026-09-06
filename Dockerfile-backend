@@ -15,6 +15,8 @@ FROM alpine:3.19
 RUN apk add --no-cache ca-certificates tzdata
 COPY --from=builder /build/new-api /
 COPY LICENSE NOTICE THIRD-PARTY-LICENSES.md /licenses/
+# 验证码邮件内联 logo（cid 附件），供 backend 运行时读取
+COPY web/classic/public/LoveApi.png /app/loveapi-logo.png
 EXPOSE 3000
 WORKDIR /data
 ENTRYPOINT ["/new-api"]

@@ -63,13 +63,22 @@ interface Props {
   onSuccess?: () => void
 }
 
+// isSubExpired 判断订阅是否已过期，兼容 unix 秒数字与 RFC3339 字符串。
+function isSubExpired(endTime: number | string | null | undefined): boolean {
+  if (endTime == null || endTime === 0 || endTime === '') return false
+  if (typeof endTime === 'string') {
+    const ms = Date.parse(endTime)
+    if (Number.isNaN(ms)) return false
+    return ms < Date.now()
+  }
+  return endTime < Date.now() / 1000
+}
+
 function SubscriptionStatusBadge(props: {
   sub: UserSubscriptionRecord['subscription']
   t: (key: string) => string
 }) {
-  // eslint-disable-next-line react-hooks/purity
-  const now = Date.now() / 1000
-  const isExpired = (props.sub.end_time || 0) > 0 && props.sub.end_time < now
+  const isExpired = isSubExpired(props.sub.end_time)
   const isActive = props.sub.status === 'active' && !isExpired
   if (isActive)
     return (
@@ -270,9 +279,7 @@ export function UserSubscriptionsDialog(props: Props) {
                   ) : (
                     subs.map((record) => {
                       const sub = record.subscription
-                      const now = Date.now() / 1000
-                      const isExpired =
-                        (sub.end_time || 0) > 0 && sub.end_time < now
+                      const isExpired = isSubExpired(sub.end_time)
                       const isActive = sub.status === 'active' && !isExpired
                       const total = Number(sub.amount_total || 0)
                       const used = Number(sub.amount_used || 0)

@@ -10,6 +10,8 @@ import (
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/dto"
 	commonRelay "github.com/QuantumNous/new-api/relay/common"
+
+	"gorm.io/gorm"
 )
 
 type TaskStatus string
@@ -43,8 +45,8 @@ const (
 
 type Task struct {
 	ID         int64                 `json:"id" gorm:"primary_key;AUTO_INCREMENT"`
-	CreatedAt  int64                 `json:"created_at" gorm:"index"`
-	UpdatedAt  int64                 `json:"updated_at"`
+	CreatedAt  time.Time             `json:"created_at" gorm:"autoCreateTime;type:datetime;index"`
+	UpdatedAt  time.Time             `json:"updated_at" gorm:"autoUpdateTime;type:datetime"`
 	TaskID     string                `json:"task_id" gorm:"type:varchar(191);index"` // 第三方id，不一定有/ song id\ Task id
 	Platform   constant.TaskPlatform `json:"platform" gorm:"type:varchar(30);index"` // 平台
 	UserId     int                   `json:"user_id" gorm:"index"`
@@ -54,9 +56,9 @@ type Task struct {
 	Action     string                `json:"action" gorm:"type:varchar(40);index"` // 任务类型, song, lyrics, description-mode
 	Status     TaskStatus            `json:"status" gorm:"type:varchar(20);index"` // 任务状态
 	FailReason string                `json:"fail_reason"`
-	SubmitTime int64                 `json:"submit_time" gorm:"index"`
-	StartTime  int64                 `json:"start_time" gorm:"index"`
-	FinishTime int64                 `json:"finish_time" gorm:"index"`
+	SubmitTime time.Time             `json:"submit_time" gorm:"type:datetime;index"`
+	StartTime  time.Time             `json:"start_time" gorm:"type:datetime;index"`
+	FinishTime time.Time             `json:"finish_time" gorm:"type:datetime;index"`
 	Progress   string                `json:"progress" gorm:"type:varchar(20);index"`
 	Properties Properties            `json:"properties" gorm:"type:json"`
 	Username   string                `json:"username,omitempty" gorm:"-"`
@@ -197,7 +199,7 @@ func InitTask(platform constant.TaskPlatform, relayInfo *commonRelay.RelayInfo) 
 		TaskID:      taskID,
 		UserId:      relayInfo.UserId,
 		Group:       relayInfo.UsingGroup,
-		SubmitTime:  time.Now().Unix(),
+		SubmitTime:  time.Now(),
 		Status:      TaskStatusNotStart,
 		Progress:    "0%",
 		ChannelId:   relayInfo.ChannelId,
@@ -229,10 +231,10 @@ func TaskGetAllUserTask(userId int, startIdx int, num int, queryParams SyncTaskQ
 	}
 	if queryParams.StartTimestamp != 0 {
 		// 假设您已将前端传来的时间戳转换为数据库所需的时间格式，并处理了时间戳的验证和解析
-		query = query.Where("submit_time >= ?", queryParams.StartTimestamp)
+		query = query.Where("submit_time >= ?", time.Unix(queryParams.StartTimestamp, 0))
 	}
 	if queryParams.EndTimestamp != 0 {
-		query = query.Where("submit_time <= ?", queryParams.EndTimestamp)
+		query = query.Where("submit_time <= ?", time.Unix(queryParams.EndTimestamp, 0))
 	}
 
 	// 获取数据
@@ -274,10 +276,10 @@ func TaskGetAllTasks(startIdx int, num int, queryParams SyncTaskQueryParams) []*
 		query = query.Where("status = ?", queryParams.Status)
 	}
 	if queryParams.StartTimestamp != 0 {
-		query = query.Where("submit_time >= ?", queryParams.StartTimestamp)
+		query = query.Where("submit_time >= ?", time.Unix(queryParams.StartTimestamp, 0))
 	}
 	if queryParams.EndTimestamp != 0 {
-		query = query.Where("submit_time <= ?", queryParams.EndTimestamp)
+		query = query.Where("submit_time <= ?", time.Unix(queryParams.EndTimestamp, 0))
 	}
 
 	// 获取数据
@@ -289,11 +291,11 @@ func TaskGetAllTasks(startIdx int, num int, queryParams SyncTaskQueryParams) []*
 	return tasks
 }
 
-func GetTimedOutUnfinishedTasks(cutoffUnix int64, limit int) []*Task {
+func GetTimedOutUnfinishedTasks(cutoff time.Time, limit int) []*Task {
 	var tasks []*Task
 	err := DB.Where("progress != ?", "100%").
 		Where("status NOT IN ?", []string{TaskStatusFailure, TaskStatusSuccess}).
-		Where("submit_time < ?", cutoffUnix).
+		Where("submit_time < ?", cutoff).
 		Order("submit_time").
 		Limit(limit).
 		Find(&tasks).Error
@@ -366,8 +368,8 @@ func (Task *Task) Insert() error {
 type taskSnapshot struct {
 	Status     TaskStatus
 	Progress   string
-	StartTime  int64
-	FinishTime int64
+	StartTime  time.Time
+	FinishTime time.Time
 	FailReason string
 	ResultURL  string
 	Data       json.RawMessage
@@ -376,11 +378,33 @@ type taskSnapshot struct {
 func (s taskSnapshot) Equal(other taskSnapshot) bool {
 	return s.Status == other.Status &&
 		s.Progress == other.Progress &&
-		s.StartTime == other.StartTime &&
-		s.FinishTime == other.FinishTime &&
+		s.StartTime.Equal(other.StartTime) &&
+		s.FinishTime.Equal(other.FinishTime) &&
 		s.FailReason == other.FailReason &&
 		s.ResultURL == other.ResultURL &&
 		bytes.Equal(s.Data, other.Data)
+}
+
+// BeforeCreate 在任务入库前填充时间字段，避免 time.Time 零值写入 MySQL 触发
+// '0000-00-00' DATETIME 报错(NO_ZERO_DATE)。
+func (t *Task) BeforeCreate(tx *gorm.DB) error {
+	now := time.Now()
+	if t.CreatedAt.IsZero() {
+		t.CreatedAt = now
+	}
+	if t.UpdatedAt.IsZero() {
+		t.UpdatedAt = now
+	}
+	if t.SubmitTime.IsZero() {
+		t.SubmitTime = now
+	}
+	if t.StartTime.IsZero() {
+		t.StartTime = now
+	}
+	if t.FinishTime.IsZero() {
+		t.FinishTime = now
+	}
+	return nil
 }
 
 func (t *Task) Snapshot() taskSnapshot {
@@ -472,10 +496,10 @@ func TaskCountAllTasks(queryParams SyncTaskQueryParams) int64 {
 		query = query.Where("status = ?", queryParams.Status)
 	}
 	if queryParams.StartTimestamp != 0 {
-		query = query.Where("submit_time >= ?", queryParams.StartTimestamp)
+		query = query.Where("submit_time >= ?", time.Unix(queryParams.StartTimestamp, 0))
 	}
 	if queryParams.EndTimestamp != 0 {
-		query = query.Where("submit_time <= ?", queryParams.EndTimestamp)
+		query = query.Where("submit_time <= ?", time.Unix(queryParams.EndTimestamp, 0))
 	}
 	_ = query.Count(&total).Error
 	return total
@@ -498,22 +522,47 @@ func TaskCountAllUserTask(userId int, queryParams SyncTaskQueryParams) int64 {
 		query = query.Where("platform = ?", queryParams.Platform)
 	}
 	if queryParams.StartTimestamp != 0 {
-		query = query.Where("submit_time >= ?", queryParams.StartTimestamp)
+		query = query.Where("submit_time >= ?", time.Unix(queryParams.StartTimestamp, 0))
 	}
 	if queryParams.EndTimestamp != 0 {
-		query = query.Where("submit_time <= ?", queryParams.EndTimestamp)
+		query = query.Where("submit_time <= ?", time.Unix(queryParams.EndTimestamp, 0))
 	}
 	_ = query.Count(&total).Error
 	return total
 }
+// CreatedAtUnix 返回 created_at 的 unix 秒，零值返回 0（供上游请求 DTO 使用）。
+func (t *Task) CreatedAtUnix() int64 {
+	return t.CreatedAt.Unix()
+}
+
+// UpdatedAtUnix 返回 updated_at 的 unix 秒，零值返回 0。
+func (t *Task) UpdatedAtUnix() int64 {
+	return t.UpdatedAt.Unix()
+}
+
+// SubmitTimeUnix 返回 submit_time 的 unix 秒，零值返回 0。
+func (t *Task) SubmitTimeUnix() int64 {
+	return t.SubmitTime.Unix()
+}
+
+// StartTimeUnix 返回 start_time 的 unix 秒，零值返回 0。
+func (t *Task) StartTimeUnix() int64 {
+	return t.StartTime.Unix()
+}
+
+// FinishTimeUnix 返回 finish_time 的 unix 秒，零值返回 0。
+func (t *Task) FinishTimeUnix() int64 {
+	return t.FinishTime.Unix()
+}
+
 func (t *Task) ToOpenAIVideo() *dto.OpenAIVideo {
 	openAIVideo := dto.NewOpenAIVideo()
 	openAIVideo.ID = t.TaskID
 	openAIVideo.Status = t.Status.ToVideoStatus()
 	openAIVideo.Model = t.Properties.OriginModelName
 	openAIVideo.SetProgressStr(t.Progress)
-	openAIVideo.CreatedAt = t.CreatedAt
-	openAIVideo.CompletedAt = t.UpdatedAt
+	openAIVideo.CreatedAt = t.CreatedAt.Unix()
+	openAIVideo.CompletedAt = t.UpdatedAt.Unix()
 	openAIVideo.SetMetadata("url", t.GetResultURL())
 	return openAIVideo
 }

@@ -11,11 +11,11 @@ type CanvasHistory struct {
 	Payload   string `json:"payload" gorm:"type:text"`
 	FilePath  string `json:"-" gorm:"type:text"`
 	MimeType  string `json:"mime_type" gorm:"type:varchar(64)"`
-	CreatedAt int64  `json:"created_at" gorm:"index"`
-	UpdatedAt int64  `json:"updated_at"`
+	CreatedAt time.Time `json:"created_at" gorm:"index"`
+	UpdatedAt time.Time `json:"updated_at"`
 }
 
 func NewCanvasHistory(userID int, imageID, payload string) *CanvasHistory {
-	now := time.Now().UnixMilli()
+	now := time.Now()
 	return &CanvasHistory{UserID: userID, ImageID: imageID, Payload: payload, CreatedAt: now, UpdatedAt: now}
 }

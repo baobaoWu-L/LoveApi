@@ -114,9 +114,32 @@ export function quotaUnitsToDollars(units: number): number {
 // ============================================================================
 
 /**
+ * Normalize a raw timestamp (numeric seconds/millis or RFC3339 string) to
+ * epoch milliseconds, or null for the "never/empty" sentinel values.
+ * Backend time fields are migrating from unix integers to DATETIME strings,
+ * so both forms must be accepted here.
+ */
+function toTimestampMs(
+  timestamp?: number | string,
+  unit: 'seconds' | 'milliseconds' = 'seconds'
+): number | null {
+  if (timestamp == null || timestamp === '' || timestamp === -1 || timestamp === 0) {
+    return null
+  }
+  if (typeof timestamp === 'string') {
+    const ms = Date.parse(timestamp)
+    if (Number.isNaN(ms)) return null
+    // 零值 time.Time 会序列化为 0001-01-01T00:00:00Z，按空值处理
+    if (new Date(ms).getUTCFullYear() <= 1) return null
+    return ms
+  }
+  return unit === 'seconds' ? timestamp * 1000 : timestamp
+}
+
+/**
  * Format Unix timestamp (seconds) to YYYY-MM-DD HH:mm:ss
  */
-export function formatTimestamp(timestamp: number): string {
+export function formatTimestamp(timestamp?: number | string): string {
   if (timestamp === -1) {
     return 'Never'
   }
@@ -125,17 +148,17 @@ export function formatTimestamp(timestamp: number): string {
 
 /**
  * Format timestamp to YYYY-MM-DD HH:mm:ss
- * @param timestamp - Timestamp in seconds or milliseconds
+ * @param timestamp - Timestamp in seconds or milliseconds, or an RFC3339 string
  * @param unit - Unit of the timestamp ('seconds' or 'milliseconds')
  */
 export function formatTimestampToDate(
-  timestamp?: number,
+  timestamp?: number | string,
   unit: 'seconds' | 'milliseconds' = 'seconds'
 ): string {
-  if (!timestamp || timestamp === -1 || timestamp === 0) {
+  const ms = toTimestampMs(timestamp, unit)
+  if (ms == null) {
     return '-'
   }
-  const ms = unit === 'seconds' ? timestamp * 1000 : timestamp
   return dayjs(ms).format('YYYY-MM-DD HH:mm:ss')
 }
 
@@ -189,11 +212,13 @@ export function formatUseTime(seconds: number): string {
 /**
  * Format timestamp to date input value (YYYY-MM-DDTHH:mm)
  */
-export function formatTimestampForInput(timestamp: number): string {
+export function formatTimestampForInput(timestamp?: number | string): string {
   if (timestamp === -1) {
     return ''
   }
-  return dayjs(timestamp * 1000).format('YYYY-MM-DDTHH:mm')
+  const ms = toTimestampMs(timestamp)
+  if (ms == null) return ''
+  return dayjs(ms).format('YYYY-MM-DDTHH:mm')
 }
 
 /**
