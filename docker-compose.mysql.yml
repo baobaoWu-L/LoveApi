@@ -13,10 +13,11 @@ services:
       - ./data:/data
       - ./logs:/app/logs
     environment:
-      - SQL_DSN=root:love-api-lovebreaker-2004@tcp(mysql:3306)/love_api?charset=utf8mb4&parseTime=True&loc=Local
+      - SQL_DSN=${SQL_DSN}
       - REDIS_CONN_STRING=redis://:love-api-lovebreaker-2004@redis:6379
       - TZ=Asia/Shanghai
       - SESSION_SECRET=740e859f2badc3dca4dbbc4121815f0d81cab2334695b5f3766afb1718c705e9
+      - CRYPTO_SECRET=${CRYPTO_SECRET:-}
       - ERROR_LOG_ENABLED=true
       - BATCH_UPDATE_ENABLED=true
       - MAX_REQUEST_BODY_MB=1024
@@ -25,6 +26,8 @@ services:
       - SUPERAI_ACCOUNT_API_TOKEN=${SUPERAI_ACCOUNT_API_TOKEN:-}
       - SUPERAI_ACCOUNT_USER_ID=${SUPERAI_ACCOUNT_USER_ID:-}
       - SUPERAI_ACCOUNT_API_URL=${SUPERAI_ACCOUNT_API_URL:-https://superaiapi.com/api/user/self}
+      - SUPERAI_PRICING_API_TOKEN=${SUPERAI_PRICING_API_TOKEN:-}
+      - SUPERAI_PRICING_API_URL=${SUPERAI_PRICING_API_URL:-https://superaiapi.com/api/pricing}
     depends_on:
       - redis
       - mysql

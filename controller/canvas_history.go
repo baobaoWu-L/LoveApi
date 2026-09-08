@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -28,12 +29,72 @@ func canvasHistoryDir() string {
 	if dir := strings.TrimSpace(os.Getenv("CANVAS_HISTORY_DIR")); dir != "" {
 		return dir
 	}
-	return filepath.Join("data", "canvas-history")
+	return "history"
 }
 
-func canvasHistoryFilePath(userID int, imageID string) string {
+func canvasHistoryFilePath(userID int, imageID string, createdAt time.Time) string {
 	digest := sha256.Sum256([]byte(imageID))
-	return filepath.Join(canvasHistoryDir(), fmt.Sprintf("%d-%s.img", userID, hex.EncodeToString(digest[:])))
+	if createdAt.IsZero() {
+		createdAt = time.Now()
+	}
+	return filepath.Join(canvasHistoryDir(), strconv.Itoa(userID), fmt.Sprintf("%d-%s.png", createdAt.UnixNano(), hex.EncodeToString(digest[:8])))
+}
+
+func pathWithinRoot(root, path string) bool {
+	rootAbs, err := filepath.Abs(root)
+	if err != nil {
+		return false
+	}
+	pathAbs, err := filepath.Abs(path)
+	if err != nil {
+		return false
+	}
+	rel, err := filepath.Rel(rootAbs, pathAbs)
+	return err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
+}
+
+func migrateCanvasHistoryFile(row *model.CanvasHistory) error {
+	if row == nil || row.FilePath == "" {
+		return nil
+	}
+	if pathWithinRoot(filepath.Join(canvasHistoryDir(), strconv.Itoa(row.UserID)), row.FilePath) {
+		return nil
+	}
+	if !pathWithinRoot(filepath.Join("data", "canvas-history"), row.FilePath) {
+		return nil
+	}
+	if _, err := os.Stat(row.FilePath); err != nil {
+		return err
+	}
+	oldPath := row.FilePath
+	newPath := canvasHistoryFilePath(row.UserID, row.ImageID, row.CreatedAt)
+	if err := os.MkdirAll(filepath.Dir(newPath), 0750); err != nil {
+		return err
+	}
+	source, err := os.Open(row.FilePath)
+	if err != nil {
+		return err
+	}
+	defer source.Close()
+	target, err := os.OpenFile(newPath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
+	if err != nil {
+		return err
+	}
+	if _, err = io.Copy(target, source); err != nil {
+		_ = target.Close()
+		_ = os.Remove(newPath)
+		return err
+	}
+	if err = target.Close(); err != nil {
+		_ = os.Remove(newPath)
+		return err
+	}
+	if err = model.DB.Model(row).Update("file_path", newPath).Error; err != nil {
+		_ = os.Remove(newPath)
+		return err
+	}
+	row.FilePath = newPath
+	return os.Remove(oldPath)
 }
 
 func canvasHistoryImage(ctx context.Context, item map[string]any) ([]byte, string, error) {
@@ -121,13 +182,14 @@ func GetCanvasHistory(c *gin.Context) {
 		return
 	}
 	items := make([]any, 0, len(rows))
-	for _, row := range rows {
+	for i := range rows {
+		_ = migrateCanvasHistoryFile(&rows[i])
 		var payload any
-		if err := common.UnmarshalJsonStr(row.Payload, &payload); err != nil {
+		if err := common.UnmarshalJsonStr(rows[i].Payload, &payload); err != nil {
 			continue
 		}
-		if obj, ok := payload.(map[string]any); ok && row.FilePath != "" {
-			obj["url"] = "/api/canvas/history/" + url.PathEscape(row.ImageID) + "/image"
+		if obj, ok := payload.(map[string]any); ok && rows[i].FilePath != "" {
+			obj["url"] = "/api/canvas/history/" + url.PathEscape(rows[i].ImageID) + "/image"
 			delete(obj, "b64_json")
 			payload = obj
 		}
@@ -187,12 +249,15 @@ func SaveCanvasHistory(c *gin.Context) {
 		row.UserID = userID
 		row.ImageID = id
 		if len(imageBytes) > 0 {
-			if err := os.MkdirAll(canvasHistoryDir(), 0750); err != nil {
+			if row.FilePath != "" {
+				_ = migrateCanvasHistoryFile(&row)
+			}
+			if err := os.MkdirAll(filepath.Dir(canvasHistoryFilePath(userID, id, row.CreatedAt)), 0750); err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": err.Error()})
 				return
 			}
 			if row.FilePath == "" {
-				row.FilePath = canvasHistoryFilePath(userID, id)
+				row.FilePath = canvasHistoryFilePath(userID, id, row.CreatedAt)
 			}
 			if err := os.WriteFile(row.FilePath, imageBytes, 0600); err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": err.Error()})
@@ -230,7 +295,11 @@ func GetCanvasHistoryImage(c *gin.Context) {
 		c.Status(http.StatusNotFound)
 		return
 	}
-	if filepath.Clean(filepath.Dir(row.FilePath)) != filepath.Clean(canvasHistoryDir()) {
+	if err := migrateCanvasHistoryFile(&row); err != nil {
+		c.Status(http.StatusNotFound)
+		return
+	}
+	if !pathWithinRoot(filepath.Join(canvasHistoryDir(), strconv.Itoa(userID)), row.FilePath) {
 		c.Status(http.StatusNotFound)
 		return
 	}

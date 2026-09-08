@@ -18,7 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { Activity, BarChart3, Coins, RefreshCw, WalletCards } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { formatQuota } from '@/lib/format'
+import { formatQuota, formatQuotaAsUSD, formatUSD } from '@/lib/format'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import type { UpstreamBalanceSummary, UserWalletData } from '../types'
@@ -70,7 +70,9 @@ export function WalletStatsCard(props: WalletStatsCardProps) {
         ? upstream
           ? formatUpstreamUSD(upstream.balance_usd)
           : t('Not synchronized')
-        : formatQuota(props.user?.quota ?? 0),
+        : props.user?.balance_usd == null
+          ? formatQuotaAsUSD(props.user?.quota ?? 0)
+          : formatUSD(props.user.balance_usd),
       description: isUpstream
         ? t('Live balance from upstream account (USD)')
         : t('Remaining quota'),

@@ -74,10 +74,14 @@ func ModelPriceHelper(c *gin.Context, info *relaycommon.RelayInfo, promptTokens 
 	}
 
 	groupRatioInfo := HandleGroupRatio(c, info)
-	// Fixed-price image models are priced per generated image in USD. Their
-	// request price (and, for gpt-image-2, resolution tier) is authoritative,
-	// so neither the model ratio nor the user's group multiplier may alter it.
+	// Fixed-price models store the final platform USD price. The configured
+	// group ratios are not applied a second time, otherwise a sheet price such
+	// as $0.05 would silently become $0.06 in a 1.2x group.
 	if _, ok := model.RequestPriceUSD(info.OriginModelName); ok {
+		groupRatioInfo.GroupRatio = 1
+		groupRatioInfo.GroupSpecialRatio = -1
+		groupRatioInfo.HasSpecialRatio = false
+	} else if usePrice {
 		groupRatioInfo.GroupRatio = 1
 		groupRatioInfo.GroupSpecialRatio = -1
 		groupRatioInfo.HasSpecialRatio = false

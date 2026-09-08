@@ -383,7 +383,7 @@ export function SignUpForm({
               <DialogTitle>{t('WeChat sign in')}</DialogTitle>
               <DialogDescription>
                 {t(
-                  'Scan the QR code to follow the official account and reply with “验证码” to receive your verification code.'
+                  'Scan the QR code to follow the official account and reply with “verification code” to receive your verification code.'
                 )}
               </DialogDescription>
             </DialogHeader>

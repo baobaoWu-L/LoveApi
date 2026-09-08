@@ -154,7 +154,7 @@ export function useSecureVerification(
       } catch (error) {
         const message =
           error instanceof Error
-            ? error.message
+            ? i18next.t(error.message)
             : i18next.t('Verification failed')
         toast.error(message)
         onError?.(error)

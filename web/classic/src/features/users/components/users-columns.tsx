@@ -18,7 +18,12 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { type ColumnDef } from '@tanstack/react-table'
 import { useTranslation } from 'react-i18next'
-import { formatQuota, formatTimestamp } from '@/lib/format'
+import {
+  formatQuota,
+  formatQuotaAsUSD,
+  formatTimestamp,
+  formatUSD,
+} from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Progress } from '@/components/ui/progress'
@@ -162,12 +167,16 @@ export function useUsersColumns(): ColumnDef<User>[] {
       id: 'quota',
       accessorKey: 'quota',
       header: ({ column }) => (
-        <DataTableColumnHeader column={column} title={t('Quota')} />
+        <DataTableColumnHeader
+          column={column}
+          title={`${t('Current Balance')} (USD)`}
+        />
       ),
       cell: ({ row }) => {
         const user = row.original
         const used = user.used_quota
         const remaining = user.quota
+        const remainingUSD = user.balance_usd
         const total = used + remaining
         const percentage = total > 0 ? (remaining / total) * 100 : 0
 
@@ -188,7 +197,9 @@ export function useUsersColumns(): ColumnDef<User>[] {
             >
               <div className='flex justify-between text-xs'>
                 <span className='font-medium tabular-nums'>
-                  {formatQuota(remaining)}
+                  {remainingUSD == null
+                    ? formatQuotaAsUSD(remaining)
+                    : formatUSD(remainingUSD)}
                 </span>
                 <span className='text-muted-foreground tabular-nums'>
                   {formatQuota(total)}
@@ -205,7 +216,10 @@ export function useUsersColumns(): ColumnDef<User>[] {
                   {t('Used:')} {formatQuota(used)}
                 </div>
                 <div>
-                  {t('Remaining:')} {formatQuota(remaining)}
+                  {t('Remaining:')}{' '}
+                  {remainingUSD == null
+                    ? formatQuotaAsUSD(remaining)
+                    : formatUSD(remainingUSD)}
                 </div>
                 <div>
                   {t('Total:')} {formatQuota(total)}
@@ -218,7 +232,7 @@ export function useUsersColumns(): ColumnDef<User>[] {
           </Tooltip>
         )
       },
-      meta: { label: t('Quota') },
+      meta: { label: `${t('Current Balance')} (USD)` },
     },
     {
       accessorKey: 'group',

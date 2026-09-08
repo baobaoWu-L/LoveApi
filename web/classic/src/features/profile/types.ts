@@ -47,6 +47,8 @@ export interface UserProfile {
   group: string
   /** Current quota balance */
   quota: number
+  /** Current quota converted to USD by the backend */
+  balance_usd?: number
   /** Total used quota */
   used_quota: number
   /** Total request count */

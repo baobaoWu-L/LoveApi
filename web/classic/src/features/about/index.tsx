@@ -60,7 +60,7 @@ function EmptyAboutState() {
           </div>
           <div className='space-y-4 text-sm'>
             <p>
-              {t('Love API Project Repository:')}{' '}
+              {t('LovebreakerApi Project Repository:')}{' '}
               <a
                 href='https://github.com/QuantumNous/new-api'
                 target='_blank'
@@ -71,7 +71,7 @@ function EmptyAboutState() {
               </a>
             </p>
             <p className='text-muted-foreground'>
-              {t('LoveAPI')} © {currentYear}{' '}
+              {t('LovebreakerApi')} © {currentYear}{' '}
               <a
                 href='https://github.com/QuantumNous'
                 target='_blank'
@@ -108,9 +108,9 @@ function EmptyAboutState() {
 }
 
 export function About() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const { data, isLoading } = useQuery({
-    queryKey: ['about-content'],
+    queryKey: ['about-content', i18n.language],
     queryFn: getAboutContent,
   })
   const rawContent = data?.data?.trim() ?? ''
@@ -130,7 +130,7 @@ export function About() {
               {t('About')}
             </span>
             <h1 className='mt-3 text-4xl font-bold tracking-tight sm:text-5xl'>
-              {t('About Love Api')}
+              {t('About')} LovebreakerApi
             </h1>
             <p className='text-muted-foreground mt-3 max-w-2xl leading-relaxed'>
               {t(

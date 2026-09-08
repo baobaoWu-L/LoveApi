@@ -180,12 +180,39 @@ func GetNotice(c *gin.Context) {
 func GetAbout(c *gin.Context) {
 	common.OptionMapRWMutex.RLock()
 	defer common.OptionMapRWMutex.RUnlock()
+	content := selectAboutLanguage(common.OptionMap["About"], c.GetHeader("Accept-Language"))
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "",
-		"data":    common.OptionMap["About"],
+		"data":    content,
 	})
 	return
+}
+
+// selectAboutLanguage keeps old plain-text content compatible while allowing
+// administrators to store a JSON object keyed by locale.
+func selectAboutLanguage(raw, acceptLanguage string) string {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" || !strings.HasPrefix(trimmed, "{") {
+		return raw
+	}
+	var localized map[string]string
+	if err := common.UnmarshalJsonStr(trimmed, &localized); err != nil || len(localized) == 0 {
+		return raw
+	}
+	lang := strings.ToLower(strings.TrimSpace(strings.Split(acceptLanguage, ",")[0]))
+	lang = strings.Split(lang, "-")[0]
+	for _, key := range []string{lang, "zh", "en"} {
+		if value := strings.TrimSpace(localized[key]); value != "" {
+			return value
+		}
+	}
+	for _, value := range localized {
+		if strings.TrimSpace(value) != "" {
+			return value
+		}
+	}
+	return raw
 }
 
 func GetUserAgreement(c *gin.Context) {
@@ -283,20 +310,20 @@ func SendEmailVerification(c *gin.Context) {
 	}
 	code := common.GenerateVerificationCode(6)
 	common.RegisterVerificationCodeWithKey(email, code, common.EmailVerificationPurpose)
-	subject := "LoveApi - Email Verification"
+	subject := "LovebreakerApi - Email Verification"
 	// 通过 type 参数区分场景：register=注册验证码（默认），login=登录验证码
 	verifyType := c.Query("type")
-	desc := "You are registering a LoveApi account."
+	desc := "You are registering a LovebreakerApi account."
 	if verifyType == "login" {
-		desc = "You are logging in to your LoveApi account."
+		desc = "You are logging in to your LovebreakerApi account."
 	}
 	content := fmt.Sprintf(`<div style="text-align:center;font-family:Arial,Helvetica,sans-serif;padding:20px;">
-  <h2 style="color:#333;margin-bottom:20px;">LoveApi</h2>
+  <h2 style="color:#333;margin-bottom:20px;">LovebreakerApi</h2>
   <p style="font-size:16px;color:#666;">Here is your verification code:</p>
   <p style="font-size:28px;font-weight:bold;letter-spacing:5px;color:#ff6b9d;margin:20px 0;">%s</p>
   <p style="font-size:14px;color:#666;line-height:1.6;">%s Please do not forward or share this code with anyone, as it may lead to account theft.</p>
   <p style="font-size:14px;color:#999;">This code is valid for %d minutes. If you did not request it, please ignore this email.</p>
-  <img src="cid:loveapilogo" alt="LoveApi" style="width:220px;height:auto;margin:24px auto 0;display:block;"/>
+  <img src="cid:loveapilogo" alt="LovebreakerApi" style="width:220px;height:auto;margin:24px auto 0;display:block;"/>
 </div>`, code, desc, common.VerificationValidMinutes)
 	err := common.SendEmailWithAttachment(subject, email, content, "/app/loveapi-logo.png")
 	if err != nil {

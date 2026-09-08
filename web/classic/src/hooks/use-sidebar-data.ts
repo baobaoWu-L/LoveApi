@@ -62,7 +62,7 @@ export function useSidebarData(): SidebarData {
             icon: FlaskConical,
           },
           {
-            title: '无限画布',
+            title: t('Infinite canvas'),
             url: '/canvas',
             icon: Brush,
           },

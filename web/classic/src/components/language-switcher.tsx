@@ -31,12 +31,12 @@ import {
 } from '@/components/ui/dropdown-menu'
 
 const languages = [
-  { code: 'en', label: 'English' },
-  { code: 'zh', label: '中文' },
-  { code: 'fr', label: 'Français' },
-  { code: 'ru', label: 'Русский' },
-  { code: 'ja', label: '日本語' },
-  { code: 'vi', label: 'Tiếng Việt' },
+  { code: 'en', labelKey: 'English' },
+  { code: 'zh', labelKey: 'Chinese' },
+  { code: 'fr', labelKey: 'French' },
+  { code: 'ru', labelKey: 'Russian' },
+  { code: 'ja', labelKey: 'Japanese' },
+  { code: 'vi', labelKey: 'Vietnamese' },
 ]
 
 export function LanguageSwitcher() {
@@ -71,7 +71,7 @@ export function LanguageSwitcher() {
             key={lang.code}
             onClick={() => handleChangeLanguage(lang.code)}
           >
-            {lang.label}
+            {t(lang.labelKey)}
             <Check
               size={14}
               className={cn('ms-auto', i18n.language !== lang.code && 'hidden')}

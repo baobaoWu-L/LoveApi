@@ -62,6 +62,7 @@ const PRIMARY_DYNAMIC_FIELDS = new Set(['inputPrice', 'outputPrice'])
 
 export function isDynamicPricingModel(model: PricingModel): boolean {
   return (
+    (model.pricing_tiers?.length ?? 0) > 0 ||
     (model.billing_mode === 'tiered_expr' && Boolean(model.billing_expr)) ||
     Object.values(model.billing_expr_by_group || {}).some(Boolean)
   )
@@ -128,14 +129,33 @@ export function formatDynamicUnitPrice(
   )
 
   return formatBillingCurrencyFromUSD(displayPrice, {
-    digitsLarge: 4,
-    digitsSmall: 6,
+    digitsLarge: 5,
+    digitsSmall: 5,
     abbreviate: false,
   })
 }
 
 export function getDynamicPricingTiers(model: PricingModel, group?: string): ParsedTier[] {
   if (!isDynamicPricingModel(model)) return []
+  if (model.pricing_tiers?.length) {
+    return model.pricing_tiers.map((tier) => ({
+      label: tier.label,
+      conditions: (tier.conditions || []).map((condition) => ({
+        var: condition.variable as 'p' | 'c' | 'len',
+        op: condition.operator as '<' | '<=' | '>' | '>=',
+        value: condition.value,
+      })),
+      inputPrice: tier.input_price,
+      outputPrice: tier.output_price,
+      cacheReadPrice: tier.cache_read_price ?? 0,
+      cacheCreatePrice: tier.cache_write_price ?? 0,
+      cacheCreate1hPrice: tier.cache_write_1h_price ?? 0,
+      imagePrice: tier.image_price ?? 0,
+      imageOutputPrice: tier.image_output_price ?? 0,
+      audioInputPrice: tier.audio_input_price ?? 0,
+      audioOutputPrice: tier.audio_output_price ?? 0,
+    }))
+  }
   const expression = getDynamicExpression(model, group)
   const { billingExpr } = splitBillingExprAndRequestRules(
     expression

@@ -54,6 +54,17 @@ export function formatCurrencyUSD(value: number | null | undefined): string {
   return formatCurrencyFromUSD(value == null ? null : (value as number))
 }
 
+/** Format an already-converted USD amount without applying quota conversion. */
+export function formatUSD(valueUSD: number | null | undefined): string {
+  if (valueUSD == null || Number.isNaN(valueUSD)) return '-'
+  return new Intl.NumberFormat(undefined, {
+    style: 'currency',
+    currency: 'USD',
+    minimumFractionDigits: 5,
+    maximumFractionDigits: 5,
+  }).format(valueUSD)
+}
+
 // ============================================================================
 // Quota Formatting (500,000 units = $1)
 // ============================================================================
@@ -68,6 +79,18 @@ export function formatQuota(quota: number): string {
     digitsSmall: 4,
     abbreviate: true,
   })
+}
+
+/** Format an internal quota amount as the user's actual available USD balance. */
+export function formatQuotaAsUSD(quota: number): string {
+  const { config } = getCurrencyDisplay()
+  const amountUSD = config.quotaPerUnit > 0 ? quota / config.quotaPerUnit : 0
+  return new Intl.NumberFormat(undefined, {
+    style: 'currency',
+    currency: 'USD',
+    minimumFractionDigits: 5,
+    maximumFractionDigits: 5,
+  }).format(amountUSD)
 }
 
 /**

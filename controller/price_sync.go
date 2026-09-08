@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math"
 	"net/http"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -56,9 +57,24 @@ func endpointsJSON(protocols []string) string {
 	return string(bytes)
 }
 
-// round4 保留 4 位小数，避免浮点尾差。
-func round4(v float64) float64 {
-	return math.Round(v*1e4) / 1e4
+// round5 keeps stored prices stable and prevents values such as 1.659999.
+func round5(v float64) float64 {
+	return math.Round(v*1e5) / 1e5
+}
+
+var billingPriceCoefficientPattern = regexp.MustCompile(`\b(p|c|cr|cc|cc1h|img|img_o|ai|ao)\s*\*\s*([0-9]+(?:\.[0-9]+)?)`)
+
+// scaleBillingExpr applies the upstream markup only to price coefficients,
+// never to context thresholds or other numeric request conditions.
+func scaleBillingExpr(expr string, markup float64) string {
+	return billingPriceCoefficientPattern.ReplaceAllStringFunc(expr, func(match string) string {
+		parts := billingPriceCoefficientPattern.FindStringSubmatch(match)
+		value, err := strconv.ParseFloat(parts[2], 64)
+		if err != nil {
+			return match
+		}
+		return strings.Replace(match, parts[2], strconv.FormatFloat(round5(value*markup), 'f', 5, 64), 1)
+	})
 }
 
 // RecomputeModelPrices 按加价系数（ModelPriceMarkupFactor）重算国产大模型价格。
@@ -75,6 +91,8 @@ func RecomputeModelPrices(c *gin.Context) {
 	ccr := ratio_setting.GetCreateCacheRatioCopy()
 	bm := billing_setting.GetBillingModeCopy()
 	be := billing_setting.GetBillingExprCopy()
+	bmg := billing_setting.GetBillingModeByGroupCopy()
+	beg := billing_setting.GetBillingExprByGroupCopy()
 
 	modelsURL, _ := getUpstreamURLs(c.Query("locale"))
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 15*time.Second)
@@ -104,20 +122,20 @@ func RecomputeModelPrices(c *gin.Context) {
 			continue
 		}
 		input := *item.PricePerMInput
-		mr[item.ModelName] = round4(input * markup / 2)
+		mr[item.ModelName] = round5(input * markup / 2)
 		delete(mp, item.ModelName)
 		if input > 0 && item.PricePerMOutput != nil {
-			cm[item.ModelName] = round4(*item.PricePerMOutput / input)
+			cm[item.ModelName] = round5(*item.PricePerMOutput / input)
 		} else {
 			delete(cm, item.ModelName)
 		}
 		if input > 0 && item.PricePerMCacheRead != nil {
-			cr[item.ModelName] = round4(*item.PricePerMCacheRead / input)
+			cr[item.ModelName] = round5(*item.PricePerMCacheRead / input)
 		} else {
 			delete(cr, item.ModelName)
 		}
 		if input > 0 && item.PricePerMCacheWrite != nil {
-			ccr[item.ModelName] = round4(*item.PricePerMCacheWrite / input)
+			ccr[item.ModelName] = round5(*item.PricePerMCacheWrite / input)
 		} else {
 			delete(ccr, item.ModelName)
 		}
@@ -129,22 +147,38 @@ func RecomputeModelPrices(c *gin.Context) {
 		switch e.Mode {
 		case "per_token":
 			inputUSD := e.InputUSD * markup
-			mr[e.ModelName] = round4(inputUSD / 2)
-			cm[e.ModelName] = round4(e.OutputUSD / e.InputUSD)
-			cr[e.ModelName] = round4(e.CacheReadUSD / e.InputUSD)
-			delete(mp, e.ModelName) // 从按次切回按量
+			mr[e.ModelName] = round5(inputUSD / 2)
+			cm[e.ModelName] = round5(e.OutputUSD / e.InputUSD)
+			cr[e.ModelName] = round5(e.CacheReadUSD / e.InputUSD)
+			delete(mp, e.ModelName)
 		case "per_request":
-			mp[e.ModelName] = round4(e.PriceUSD * markup)
+			mp[e.ModelName] = round5(e.PriceUSD * markup)
 			delete(mr, e.ModelName)
 			delete(cm, e.ModelName)
 			delete(cr, e.ModelName)
 		case "tiered":
 			bm[e.ModelName] = "tiered_expr"
-			be[e.ModelName] = e.BillingExpr // 系数已含 markup
+			be[e.ModelName] = e.BillingExpr
+			if len(e.GroupBillingExpr) > 0 {
+				groupModes := make(map[string]string, len(e.GroupBillingExpr))
+				groupExprs := make(map[string]string, len(e.GroupBillingExpr))
+				for group, expr := range e.GroupBillingExpr {
+					groupModes[group] = billing_setting.BillingModeTieredExpr
+					groupExprs[group] = expr
+				}
+				bmg[e.ModelName] = groupModes
+				beg[e.ModelName] = groupExprs
+			} else {
+				delete(bmg, e.ModelName)
+				delete(beg, e.ModelName)
+			}
 			delete(mp, e.ModelName)
 			delete(mr, e.ModelName)
 			delete(cm, e.ModelName)
 			delete(cr, e.ModelName)
+			delete(ccr, e.ModelName)
+		default:
+			continue
 		}
 		_ = model.DB.Model(&model.Model{}).
 			Where("model_name = ?", e.ModelName).
@@ -160,6 +194,8 @@ func RecomputeModelPrices(c *gin.Context) {
 	_ = model.UpdateOption("CreateCacheRatio", string(mustMarshal(ccr)))
 	_ = model.UpdateOption("billing_setting.billing_mode", string(mustMarshal(bm)))
 	_ = model.UpdateOption("billing_setting.billing_expr", string(mustMarshal(be)))
+	_ = model.UpdateOption("billing_setting.billing_mode_by_group", string(mustMarshal(bmg)))
+	_ = model.UpdateOption("billing_setting.billing_expr_by_group", string(mustMarshal(beg)))
 
 	// 立即刷新定价缓存（UpdateOption 对 billing_setting 已失效，这里统一兜底）
 	model.InvalidatePricingCache()
@@ -305,38 +341,38 @@ func SyncSuperAIPricing(c *gin.Context) {
 			continue
 		}
 		if item.QuotaType == 1 {
-			mp[name] = round4(item.ModelPrice * markup)
+			mp[name] = round5(item.ModelPrice * markup)
 			delete(mr, name)
 			delete(cm, name)
 		} else {
-			mr[name] = round4(item.ModelRatio * markup)
-			cm[name] = round4(item.CompletionRatio)
+			mr[name] = round5(item.ModelRatio * markup)
+			cm[name] = round5(item.CompletionRatio)
 			delete(mp, name)
 		}
 		if item.CacheRatio != nil {
-			cr[name] = round4(*item.CacheRatio)
+			cr[name] = round5(*item.CacheRatio)
 		} else {
 			delete(cr, name)
 		}
 		if item.CreateCacheRatio != nil {
-			ccr[name] = round4(*item.CreateCacheRatio)
+			ccr[name] = round5(*item.CreateCacheRatio)
 		} else {
 			delete(ccr, name)
 		}
 		if item.ImageRatio != nil {
-			ir[name] = round4(*item.ImageRatio * markup)
+			ir[name] = round5(*item.ImageRatio * markup)
 		}
 		if item.AudioRatio != nil {
-			ar[name] = round4(*item.AudioRatio * markup)
+			ar[name] = round5(*item.AudioRatio * markup)
 		}
 		if item.AudioCompletionRatio != nil {
-			acr[name] = round4(*item.AudioCompletionRatio)
+			acr[name] = round5(*item.AudioCompletionRatio)
 		}
 		if strings.TrimSpace(item.BillingMode) != "" {
 			bm[name] = item.BillingMode
 		}
 		if strings.TrimSpace(item.BillingExpr) != "" {
-			be[name] = item.BillingExpr
+			be[name] = scaleBillingExpr(item.BillingExpr, markup)
 		}
 		updated++
 	}

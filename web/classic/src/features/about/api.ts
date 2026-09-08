@@ -17,9 +17,12 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { api } from '@/lib/api'
+import i18n from '@/i18n/config'
 import type { AboutResponse } from './types'
 
 export async function getAboutContent() {
-  const res = await api.get<AboutResponse>('/api/about')
+  const res = await api.get<AboutResponse>('/api/about', {
+    headers: { 'Accept-Language': i18n.language },
+  })
   return res.data
 }

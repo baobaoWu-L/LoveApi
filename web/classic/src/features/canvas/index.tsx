@@ -17,6 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { useEffect, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Check, Download, ImagePlus, Loader2, RotateCcw, Sparkles, Trash2, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -52,8 +53,7 @@ const HISTORY_KEY = 'canvas-history'
 const GENERATION_STATE_KEY = 'canvas-generation-state'
 const GENERATION_STATE_TTL_MS = 15 * 60 * 1000
 const CURRENT_IMAGE_KEY = 'canvas-current-image'
-// 历史保留上限。此前为 12 导致较早的生成历史被自动清理，这里提高到 500，
-// 让用户的历史尽量全部保留（前端为按需加载缩略图，渲染压力可控）。
+// Keep enough history for long-term use while loading thumbnails on demand.
 const HISTORY_LIMIT = 500
 const IMAGE_KEY_CACHE_KEY = 'loveapi-canvas-image-keys-v1'
 const IMAGE_KEY_CACHE_TTL_MS = 5 * 60 * 1000
@@ -291,9 +291,9 @@ function clearGenerationState(userId: number | null) {
 
 async function downloadImage(url: string): Promise<boolean> {
   if (!url) return false
-  // 固定以 LoveApi 命名，避免用提示词长串当文件名
+  // 固定以 LovebreakerApi 命名，避免用提示词长串当文件名
   const ext = inferImageExtension(url)
-  const name = `LoveApi${ext}`
+  const name = `LovebreakerApi${ext}`
   if (url.startsWith('data:')) {
     const a = document.createElement('a')
     a.href = url
@@ -343,8 +343,8 @@ function inferImageExtension(url: string): string {
   return '.png'
 }
 
-// 上游 gpt-image 常返回一次性签名/防盗链链接，浏览器 <img> 直接加载会 403。
-// 这里经本地下载代理把图片转成 dataURL，确保右侧主区域一定能渲染出新图。
+// Upstream gpt-image URLs are often signed and may return 403 in the browser.
+// Convert them through the local download proxy so the main preview can render.
 async function proxyImageToDataUrl(url: string): Promise<string | undefined> {
   if (!url || url.startsWith('data:')) return url
   try {
@@ -359,7 +359,8 @@ async function proxyImageToDataUrl(url: string): Promise<string | undefined> {
     return await new Promise<string>((resolve, reject) => {
       const reader = new FileReader()
       reader.onload = () => resolve(String(reader.result))
-      reader.onerror = () => reject(reader.error || new Error('读取图片失败'))
+      reader.onerror = () =>
+        reject(reader.error || new Error('Failed to read the image.'))
       reader.readAsDataURL(blob)
     })
   } catch {
@@ -367,9 +368,8 @@ async function proxyImageToDataUrl(url: string): Promise<string | undefined> {
   }
 }
 
-// 上游返回的多为一次性 oss 链接（如 superaiapi.com），浏览器 <img> 直接加载会因
-// QUIC/HTTP3 协议错误而失败。这里优先取本地保存的图；否则经本地下载代理拉回为
-// dataURL（后端用非 QUIC 客户端下载），确保历史与主图都能显示。
+// Prefer locally stored images because signed upstream URLs can fail in browsers.
+// Otherwise fetch them through the local proxy and convert them to a data URL.
 async function hydrateLatestUrl(img: GeneratedImage): Promise<GeneratedImage> {
   if (img.b64_json) return img
   if (!img.url) return img
@@ -445,6 +445,7 @@ async function compressReferenceImage(
 }
 
 export function Canvas() {
+  const { t } = useTranslation()
   const authUser = useAuthStore((state) => state.auth.user)
   const userId = authUser?.id ?? null
   const historyStorageKey = getHistoryStorageKey(userId)
@@ -568,8 +569,8 @@ export function Canvas() {
             window.setTimeout(() => window.dispatchEvent(new Event('canvas-history-updated')), 100)
           } else if (message.type === 'canvas_generation_failed') {
             setGenerating(false)
-            // 后端 relay 失败时向下游同步错误，右侧主区域据此显示失败原因。
-            setGenerationError(message.message || '生成失败，请重试')
+            // Forward relay failures to the preview area.
+            setGenerationError(message.message || t('Generation failed. Please try again.'))
             clearGenerationState(userId)
             window.setTimeout(() => window.dispatchEvent(new Event('canvas-history-updated')), 100)
           }
@@ -843,7 +844,7 @@ export function Canvas() {
     event.target.value = ''
     if (!file) return
     if (!SUPPORTED_IMAGE_TYPES.includes(file.type)) {
-      toast.error('仅支持 png / jpg / webp')
+      toast.error(t('Only png / jpg / webp files are supported'))
       return
     }
     // 先同步显示 loading，随后异步读取文件；不人为延迟，让预览尽快出现。
@@ -861,14 +862,14 @@ export function Canvas() {
         window.setTimeout(() => setUploadStatus('idle'), 900)
       } catch (error) {
         setUploadStatus('error')
-        setUploadMsg(error instanceof Error ? error.message : '读取失败')
+        setUploadMsg(error instanceof Error ? error.message : t('Read failed'))
       }
     })()
   }
 
   const handleGenerate = async () => {
     if (!prompt.trim()) {
-      toast.error('请输入提示词')
+      toast.error(t('Please enter a prompt'))
       return
     }
     // Generating is an explicit commit of the currently visible parameters.
@@ -887,7 +888,7 @@ export function Canvas() {
         finalWidth = Number(customWidth)
         finalHeight = Number(customHeight)
         if (!Number.isInteger(finalWidth) || !Number.isInteger(finalHeight) || finalWidth < 256 || finalHeight < 256 || finalWidth > 4096 || finalHeight > 4096) {
-          throw new Error('自定义尺寸必须是 256 到 4096 之间的整数。')
+          throw new Error(t('Custom width and height must be integers between 256 and 4096.'))
         }
       } else {
         const preset = IMAGE_SIZE_PRESETS.find((item) => item.value === size) ?? IMAGE_SIZE_PRESETS[0]
@@ -898,11 +899,11 @@ export function Canvas() {
         (item) => item.width === finalWidth && item.height === finalHeight
       )
       if (!selectedKeyId) {
-        throw new Error(`没有可调用 ${model} 的 API Key，请先创建或调整 API Key 权限。`)
+        throw new Error(t('No API Key can call {{model}}. Create one or update its permissions.', { model }))
       }
       const keyResult = await fetchTokenKey(Number(selectedKeyId))
       if (!keyResult.success || !keyResult.data?.key) {
-        throw new Error(keyResult.message || '无法读取所选 API Key')
+        throw new Error(keyResult.message || t('Unable to read the selected API Key'))
       }
       const selectedApiKey = `sk-${keyResult.data.key}`
       const payload: GenerateImagePayload = {
@@ -960,7 +961,7 @@ export function Canvas() {
         }
       })
       if (imgs.length === 0) {
-        toast.error('未返回生成结果')
+        toast.error(t('No generated result was returned'))
         return
       }
       const next = [...imgs, ...history].slice(0, HISTORY_LIMIT)
@@ -982,7 +983,7 @@ export function Canvas() {
         const hydrated = await Promise.all(remote.map((image) => hydrateLatestUrl(image)))
         setHistory(mergeUniqueById([hydrated, next]))
       } catch (persistError) {
-        toast.error(persistError instanceof Error ? `历史图片保存失败：${persistError.message}` : '历史图片保存失败')
+        toast.error(persistError instanceof Error ? `${t('Failed to save image history')}: ${persistError.message}` : t('Failed to save image history'))
       }
       // Publish metadata immediately so a WebSocket listener on a newly
       // mounted canvas can show the completed item without waiting for image
@@ -1022,22 +1023,21 @@ export function Canvas() {
       await saveHistoryToIndexedDb(historyStorageKey, next)
       saveCurrentImageMetadata(userId, imgs[0])
     } catch (error) {
-      const rawMsg = error instanceof Error ? error.message : '生成失败'
+      const rawMsg = error instanceof Error ? error.message : t('Generation failed')
       const status = (error as { response?: { status?: number } })?.response?.status
-      let msg = rawMsg
-      // 脱敏：上游/网关原始错误（Cloudflare origin、upstream、bad response status code 等）
-      // 不展示给用户，改写为平台通用提示。
+      let msg = t(rawMsg)
+      // Hide low-level upstream and gateway failures behind a safe user message.
       if (
         status &&
         status >= 500 &&
         /cloudflare|origin web server|upstream|bad response status code|status_code=\d{3}/i.test(rawMsg)
       ) {
-        msg = '服务繁忙，请稍后重试'
+        msg = t('The service is busy. Please try again later.')
       }
       if (/api.?key|enabled api.?key|invalid.*key/i.test(msg)) {
         setApiKeyMissing(true)
       }
-      // 生成失败时在右侧主区域展示错误，不再残留上次成功生成的图片。
+      // Show the failure in the main preview instead of leaving stale output visible.
       setGenerationError(msg)
       toast.error(msg)
     } finally {
@@ -1097,7 +1097,7 @@ export function Canvas() {
       count: image.count || 1,
       selectedKeyId: image.selectedKeyId || '',
     })
-    toast.success('已临时恢复该次生成参数，点击画布空白处可返回当前编辑状态')
+    toast.success(t('Generation settings restored temporarily. Click the blank canvas to return to the current editor.'))
   }
 
   const restoreCurrentDraft = () => {
@@ -1107,7 +1107,7 @@ export function Canvas() {
     historicalPreviewRef.current = false
     applyEditorState(backup)
     setViewingImage(null)
-    toast('已返回当前编辑状态')
+    toast(t('Returned to the current editor'))
   }
 
   const latest = currentImage
@@ -1122,12 +1122,12 @@ export function Canvas() {
       <aside className='hidden w-[26rem] shrink-0 gap-4 overflow-y-auto border-r p-4 md:flex md:flex-col'>
         <div className={fieldClass}>
           <Label>
-            模型
-            <span className='text-[10px] font-normal text-rose-500'>必填</span>
+            {t('Model')}
+            <span className='text-[10px] font-normal text-rose-500'>{t('Required')}</span>
           </Label>
           <Select value={model} onValueChange={(v) => setModel(v ?? '')}>
             <SelectTrigger className='w-full'>
-              <SelectValue placeholder='选择模型' />
+              <SelectValue placeholder={t('Select a model')} />
             </SelectTrigger>
             <SelectContent>
               {CANVAS_IMAGE_MODELS.map((item) => (
@@ -1139,8 +1139,8 @@ export function Canvas() {
 
         <div className={fieldClass}>
           <Label>
-            API Key
-            <span className='text-[10px] font-normal text-rose-500'>必填</span>
+            {t('API Key')}
+            <span className='text-[10px] font-normal text-rose-500'>{t('Required')}</span>
           </Label>
           <Select
             value={selectedKeyId}
@@ -1150,10 +1150,10 @@ export function Canvas() {
             <SelectTrigger className='w-full'>
               <SelectValue
                 className='truncate'
-                placeholder={loadingKeys ? '正在筛选可用 API Key…' : '选择 API Key'}
+                placeholder={loadingKeys ? t('Filtering available API Keys...') : t('Select an API Key')}
               >
                 {imageKeys.find((key) => String(key.id) === selectedKeyId)?.name ||
-                  '选择 API Key'}
+                  t('Select an API Key')}
               </SelectValue>
             </SelectTrigger>
             <SelectContent>
@@ -1165,28 +1165,28 @@ export function Canvas() {
             </SelectContent>
           </Select>
           <p className='text-muted-foreground text-[10px]'>
-            仅显示已启用且允许调用 {model} 的 Key
+            {t('Only enabled API Keys allowed to call {{model}} are shown', { model })}
           </p>
         </div>
 
         <div className={fieldClass}>
           <Label>
-            提示词
-            <span className='text-[10px] font-normal text-rose-500'>必填</span>
+            {t('Prompt')}
+            <span className='text-[10px] font-normal text-rose-500'>{t('Required')}</span>
           </Label>
           <Textarea
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
-            placeholder='描述画面、风格、主体、镜头约束…'
+            placeholder={t('Describe the scene, style, subject, and camera constraints...')}
             rows={6}
           />
         </div>
 
         <div className='relative space-y-1.5'>
           <Label>
-            参考图
+            {t('Reference image')}
             <span className='text-[10px] font-normal text-muted-foreground'>
-              选填
+              {t('Optional')}
             </span>
           </Label>
           {referenceImage ? (
@@ -1201,7 +1201,7 @@ export function Canvas() {
               {/* 按上传图片比例完整显示（等比缩放），不裁切不拉伸 */}
               <img
                 src={referenceImage}
-                alt='参考图'
+                alt={t('Reference image')}
                 className='bg-muted/30 h-full w-full object-contain'
               />
               <button
@@ -1211,7 +1211,7 @@ export function Canvas() {
                   setReferenceRatio(null)
                 }}
                 className='absolute top-1.5 right-1.5 rounded-full bg-black/60 p-1 text-white'
-                aria-label='移除参考图'
+                aria-label={t('Remove reference image')}
               >
                 <X className='size-3.5' />
               </button>
@@ -1224,7 +1224,7 @@ export function Canvas() {
               className='flex w-full items-center justify-center gap-2 rounded-lg border border-dashed px-3 py-4 text-sm text-muted-foreground transition-colors hover:bg-muted/40 disabled:opacity-70'
             >
               <ImagePlus className='size-4' />
-              本地上传（png / jpg / webp，可留空）
+              {t('Upload locally (png / jpg / webp, optional)')}
             </button>
           )}
           <input
@@ -1238,9 +1238,9 @@ export function Canvas() {
 
         <div className={fieldClass}>
           <Label>
-            分辨率档位
+            {t('Resolution tier')}
             <span className='text-[10px] font-normal text-muted-foreground'>
-              选填
+              {t('Optional')}
             </span>
           </Label>
           <Select
@@ -1251,9 +1251,9 @@ export function Canvas() {
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {RESOLUTION_TIERS.map((t) => (
-                <SelectItem key={t.value} value={t.value}>
-                  {t.label}（${t.price < 0.01 ? t.price.toFixed(3) : t.price.toFixed(2)}/张）
+              {RESOLUTION_TIERS.map((tier) => (
+                <SelectItem key={tier.value} value={tier.value}>
+                  {tier.label} (${tier.price < 0.01 ? tier.price.toFixed(3) : tier.price.toFixed(2)}/{t('image')})
                 </SelectItem>
               ))}
             </SelectContent>
@@ -1262,9 +1262,9 @@ export function Canvas() {
 
         <div className={fieldClass}>
           <Label>
-            尺寸
+            {t('Size')}
             <span className='text-[10px] font-normal text-muted-foreground'>
-              选填
+              {t('Optional')}
             </span>
           </Label>
           <Select value={size} onValueChange={(v) => setSize(v ?? '')}>
@@ -1277,22 +1277,22 @@ export function Canvas() {
                   {s.label}
                 </SelectItem>
               ))}
-              <SelectItem value={CUSTOM_SIZE_VALUE}>自定义尺寸</SelectItem>
+              <SelectItem value={CUSTOM_SIZE_VALUE}>{t('Custom size')}</SelectItem>
             </SelectContent>
           </Select>
           {size === CUSTOM_SIZE_VALUE && (
             <div className='grid grid-cols-2 gap-2'>
-              <Input type='number' min={256} max={4096} placeholder='宽度' value={customWidth} onChange={(e) => setCustomWidth(e.target.value)} />
-              <Input type='number' min={256} max={4096} placeholder='高度' value={customHeight} onChange={(e) => setCustomHeight(e.target.value)} />
+              <Input type='number' min={256} max={4096} placeholder={t('Width')} value={customWidth} onChange={(e) => setCustomWidth(e.target.value)} />
+              <Input type='number' min={256} max={4096} placeholder={t('Height')} value={customHeight} onChange={(e) => setCustomHeight(e.target.value)} />
             </div>
           )}
         </div>
 
         <div className={fieldClass}>
           <Label>
-            格式
+            {t('Format')}
             <span className='text-[10px] font-normal text-muted-foreground'>
-              选填
+              {t('Optional')}
             </span>
           </Label>
           <Select value={format} onValueChange={(v) => setFormat(v ?? '')}>
@@ -1311,9 +1311,9 @@ export function Canvas() {
 
         <div className={fieldClass}>
           <Label>
-            数量
+            {t('Count')}
             <span className='text-[10px] font-normal text-muted-foreground'>
-              选填
+              {t('Optional')}
             </span>
           </Label>
           <Input
@@ -1334,7 +1334,7 @@ export function Canvas() {
 
         {apiKeyMissing && (
           <p className='rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-300'>
-            请先创建并启用 API Key，再开始生成。
+            {t('Create and enable an API Key before generating.')}
           </p>
         )}
 
@@ -1348,7 +1348,7 @@ export function Canvas() {
           ) : (
             <Sparkles className='size-4' />
           )}
-          生成图片
+          {t('Generate image')}
         </Button>
       </aside>
 
@@ -1366,24 +1366,24 @@ export function Canvas() {
           {generating ? (
             <div className='flex flex-col items-center gap-3 text-muted-foreground'>
               <Loader2 className='size-8 animate-spin' />
-              <span className='text-sm'>正在生成，请稍候…</span>
+              <span className='text-sm'>{t('Generating, please wait...')}</span>
             </div>
           ) : generationError ? (
             <div className='flex max-w-[80%] flex-col items-center gap-3 rounded-lg border border-rose-500/40 bg-rose-500/10 px-6 py-5 text-center text-rose-400'>
               <X className='size-8' />
-              <span className='text-sm font-medium'>生成失败</span>
+              <span className='text-sm font-medium'>{t('Generation failed')}</span>
               <span className='text-xs break-words whitespace-pre-wrap'>{generationError}</span>
             </div>
           ) : latestSrc ? (
             <img
               src={latestSrc}
-              alt={latest?.prompt ?? '生成结果'}
+              alt={latest?.prompt ?? t('Generated result')}
               className='max-h-[78%] max-w-[78%] object-contain'
             />
           ) : (
             <div className='flex flex-col items-center gap-3 text-muted-foreground'>
               <ImagePlus className='size-10 opacity-60' />
-              <span className='text-sm'>生成图片将在这里显示</span>
+              <span className='text-sm'>{t('Generated image will appear here')}</span>
             </div>
           )}
         </div>
@@ -1394,7 +1394,7 @@ export function Canvas() {
         <div className='shrink-0 border-t p-3'>
           <div className='mb-2 flex items-center justify-between'>
             <span className='text-xs font-medium text-muted-foreground'>
-              生成历史（{history.length}）
+              {t('Image history ({{count}})', { count: history.length })}
             </span>
             <Button
               variant='ghost'
@@ -1409,11 +1409,11 @@ export function Canvas() {
                 } catch {
                   /* ignore */
                 }
-                void deleteCanvasHistory().catch(() => toast.error('清空服务器历史失败'))
+                void deleteCanvasHistory().catch(() => toast.error(t('Failed to clear server history')))
               }}
             >
               <Trash2 className='size-3.5' />
-              清空
+              {t('Clear')}
             </Button>
           </div>
           <div className='flex gap-2 overflow-x-auto'>
@@ -1455,8 +1455,8 @@ export function Canvas() {
                           restoreHistoricalDraft(img)
                         }}
                         className='rounded-full bg-black/60 p-1.5 text-white hover:bg-black/80'
-                        aria-label='恢复草稿'
-                        title='恢复此图生成参数'
+                        aria-label={t('Restore draft')}
+                        title={t('Restore generation settings for this image')}
                       >
                         <RotateCcw className='size-4' />
                       </button>
@@ -1470,8 +1470,8 @@ export function Canvas() {
                         }}
                         className='rounded-full bg-black/60 p-1.5 text-white hover:bg-black/80 disabled:cursor-wait disabled:opacity-70'
                         disabled={downloadingImageId === img.id}
-                        aria-label='保存图片'
-                        title='保存图片'
+                        aria-label={t('Save image')}
+                        title={t('Save image')}
                       >
                         {downloadingImageId === img.id ? (
                           <Loader2 className='size-4 animate-spin' />
@@ -1492,24 +1492,24 @@ export function Canvas() {
           {uploadStatus === 'loading' && (
             <div className='flex items-center gap-2 text-sm'>
               <Loader2 className='size-4 animate-spin' />
-              正在加载图片…
+              {t('Loading image...')}
             </div>
           )}
           {uploadStatus === 'success' && (
             <div className='flex items-center gap-2 text-sm text-emerald-600'>
               <Check className='size-4' />
-              图片已加载
+              {t('Image loaded')}
             </div>
           )}
           {uploadStatus === 'error' && (
             <div className='text-sm text-rose-600'>
               <div className='flex items-center gap-2'>
                 <X className='size-4' />
-                图片加载失败
+                {t('Image loading failed')}
               </div>
               {uploadMsg && (
                 <div className='text-muted-foreground mt-1 text-xs'>
-                  错误码：{uploadMsg}
+                  {t('Error')}: {uploadMsg}
                 </div>
               )}
             </div>

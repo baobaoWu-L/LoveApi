@@ -664,14 +664,9 @@ function GroupPricingSection(props: {
                 'Group prices cannot be expanded because this expression is not a standard tiered pricing expression.'
               )}
             </p>
-            <div className='mt-3'>
-              <div className='text-muted-foreground mb-1 text-[10px] font-medium tracking-wider uppercase'>
-                {t('Raw expression')}
-              </div>
-              <code className='text-muted-foreground bg-background/80 block max-h-28 overflow-auto rounded-md border px-2 py-1.5 font-mono text-xs break-all'>
-                {props.model.billing_expr}
-              </code>
-            </div>
+            <p className='text-muted-foreground mt-3 text-xs'>
+              {t('This model uses system-managed pricing rules.')}
+            </p>
           </div>
         </section>
       )
@@ -698,15 +693,17 @@ function GroupPricingSection(props: {
         <SectionTitle>{t('Pricing by Group')}</SectionTitle>
         <AutoGroupChain model={props.model} autoGroups={props.autoGroups} />
         <div className='space-y-3'>
-          {availableGroups.map((group) => {
-            const ratio = props.groupRatio[group] || 1
+          {(props.model.pricing_group
+            ? [props.model.pricing_group]
+            : availableGroups
+          ).map((group) => {
             const groupTiers = getDynamicPricingTiers(props.model, group)
             return (
               <div key={group} className='overflow-hidden rounded-lg border'>
                 <div className='bg-muted/20 flex items-center justify-between gap-3 border-b px-3 py-2'>
                   <GroupBadge group={group} size='sm' />
                   <span className='text-muted-foreground font-mono text-xs'>
-                    {ratio}x
+                    {t('Final price')}
                   </span>
                 </div>
                 <div className='overflow-x-auto'>
@@ -731,7 +728,7 @@ function GroupPricingSection(props: {
                           showRechargePrice,
                           priceRate: props.priceRate,
                           usdExchangeRate: props.usdExchangeRate,
-                          groupRatioMultiplier: ratio,
+                          groupRatioMultiplier: 1,
                         })
                         const entryMap = new Map(
                           entries.map((entry) => [entry.field, entry])
@@ -955,7 +952,7 @@ export function ModelDetailsContent(props: ModelDetailsContentProps) {
               tokenUnit={props.tokenUnit}
               showRechargePrice={showRechargePrice}
             />
-            {isDynamic && (
+            {isDynamic && props.model.billing_expr && (
               <DynamicPricingBreakdown billingExpr={props.model.billing_expr} />
             )}
             <GroupPricingSection

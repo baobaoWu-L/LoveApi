@@ -97,19 +97,28 @@ type VideoPriceItem = {
 }
 type VideoPriceGroup = { res: string; items: VideoPriceItem[] }
 
+type VideoPriceLabels = {
+  inputImage: string
+  inputVideo: string
+  outputVideo: string
+  perSecond: string
+  fixed: string
+}
+
 /**
  * 视频模型（如 grok-imagine-video）的 request_pricing 按分辨率(480p/720p…)
  * 分组展示：每组列出 输入图片(/张)、输入视频(/秒)、输出视频(/秒)。
  * 仅当 request_pricing 的 key 形如 `<res>_input_image / _input_video_second / _output_video_second` 时启用。
  */
 function getVideoPriceGroups(
-  rp: Record<string, number>
+  rp: Record<string, number>,
+  labels: VideoPriceLabels
 ): VideoPriceGroup[] {
   const resOrder = ['480p', '720p', '1080p', '2k', '4k']
   const defs: Record<string, [string, string]> = {
-    input_image: ['输入图片', '/张'],
-    input_video_second: ['输入视频', '/秒'],
-    output_video_second: ['输出视频', '/秒'],
+    input_image: [labels.inputImage, labels.perSecond],
+    input_video_second: [labels.inputVideo, labels.perSecond],
+    output_video_second: [labels.outputVideo, labels.perSecond],
   }
   const resSet = new Set<string>()
   for (const k of Object.keys(rp || {})) {
@@ -458,6 +467,16 @@ function GroupPricingSection(props: {
     const order = { '1k': 1, '2k': 2, '4k': 3 }
     return (order[a as keyof typeof order] ?? 99) - (order[b as keyof typeof order] ?? 99)
   })
+  const videoPriceLabels = useMemo<VideoPriceLabels>(
+    () => ({
+      inputImage: t('Input image'),
+      inputVideo: t('Input video'),
+      outputVideo: t('Output video'),
+      perSecond: t('per second'),
+      fixed: t('Fixed'),
+    }),
+    [t]
+  )
 
   const extraPriceTypes = useMemo(() => {
     const types: { label: string; type: PriceType }[] = []
@@ -511,14 +530,9 @@ function GroupPricingSection(props: {
                 'Group prices cannot be expanded because this expression is not a standard tiered pricing expression.'
               )}
             </p>
-            <div className='mt-3'>
-              <div className='text-muted-foreground mb-1 text-[10px] font-medium tracking-wider uppercase'>
-                {t('Raw expression')}
-              </div>
-              <code className='text-muted-foreground bg-background/80 block max-h-28 overflow-auto rounded-md border px-2 py-1.5 font-mono text-xs break-all'>
-                {props.model.billing_expr}
-              </code>
-            </div>
+            <p className='text-muted-foreground mt-3 text-xs'>
+              {t('This model uses system-managed pricing rules.')}
+            </p>
           </div>
         </section>
       )
@@ -545,15 +559,17 @@ function GroupPricingSection(props: {
         <SectionTitle>{t('Pricing by Group')}</SectionTitle>
         <AutoGroupChain model={props.model} autoGroups={props.autoGroups} />
         <div className='space-y-3'>
-          {availableGroups.map((group) => {
-            const ratio = props.groupRatio[group] || 1
+          {(props.model.pricing_group
+            ? [props.model.pricing_group]
+            : availableGroups
+          ).map((group) => {
             const groupTiers = getDynamicPricingTiers(props.model, group)
             return (
               <div key={group} className='overflow-hidden rounded-lg border'>
                 <div className='bg-muted/20 flex items-center justify-between gap-3 border-b px-3 py-2'>
                   <GroupBadge group={group} size='sm' />
                   <span className='text-muted-foreground font-mono text-xs'>
-                    {requestTiers.length > 0 ? '固定' : `${ratio}x`}
+                    {t('Final price')}
                   </span>
                 </div>
                 <div className='overflow-x-auto'>
@@ -578,7 +594,7 @@ function GroupPricingSection(props: {
                           showRechargePrice,
                           priceRate: props.priceRate,
                           usdExchangeRate: props.usdExchangeRate,
-                          groupRatioMultiplier: ratio,
+                          groupRatioMultiplier: 1,
                         })
                         const entryMap = new Map(
                           entries.map((entry) => [entry.field, entry])
@@ -623,7 +639,7 @@ function GroupPricingSection(props: {
   }
 
   // 视频模型：按分辨率(480p/720p…)分组卡片展示（按秒/按张计费）
-  const videoGroups = getVideoPriceGroups(requestPricing)
+  const videoGroups = getVideoPriceGroups(requestPricing, videoPriceLabels)
   if (!isTokenBased && videoGroups.length > 0) {
     return (
       <section>
@@ -635,7 +651,7 @@ function GroupPricingSection(props: {
               <div className='bg-muted/20 flex items-center justify-between gap-3 border-b px-3 py-2'>
                 <GroupBadge group={group} size='sm' />
                 <span className='text-muted-foreground font-mono text-xs'>
-                  按秒计费
+                  {t('Billed per second')}
                 </span>
               </div>
               <div className='px-3 py-2.5'>
@@ -722,7 +738,7 @@ function GroupPricingSection(props: {
                     <GroupBadge group={group} size='sm' />
                   </TableCell>
                   <TableCell className='text-muted-foreground py-2.5 font-mono text-xs'>
-                    {requestTiers.length > 0 ? '固定' : `${ratio}x`}
+                    {requestTiers.length > 0 ? videoPriceLabels.fixed : `${ratio}x`}
                   </TableCell>
                   {isTokenBased ? (
                     <>
@@ -776,8 +792,8 @@ function GroupPricingSection(props: {
                       return (
                         <TableCell key={tier} className='py-2.5 text-right font-mono'>
                           {formatCurrencyFromUSD(adjusted, {
-                            digitsLarge: 4,
-                            digitsSmall: 6,
+                            digitsLarge: 5,
+                            digitsSmall: 5,
                             abbreviate: false,
                           })}
                         </TableCell>
@@ -860,7 +876,7 @@ export function ModelDetailsContent(props: ModelDetailsContentProps) {
 
           <section className='bg-card/60 space-y-5 rounded-xl border p-4 shadow-sm'>
             <SectionTitle>{t('Pricing')}</SectionTitle>
-            {isDynamic && (
+            {isDynamic && props.model.billing_expr && (
               <DynamicPricingBreakdown billingExpr={props.model.billing_expr} />
             )}
             <GroupPricingSection

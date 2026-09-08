@@ -26,8 +26,6 @@ import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard'
 import { StatusBadge } from '@/components/status-badge'
 import { DEFAULT_TOKEN_UNIT, FILTER_ALL } from '../constants'
 import {
-  getDynamicDisplayGroupRatio,
-  getDynamicGroupRatio,
   getDynamicPricingSummary,
   isDynamicPricingModel,
 } from '../lib/dynamic-price'
@@ -100,9 +98,8 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
         showRechargePrice,
         priceRate,
         usdExchangeRate,
-        groupRatioMultiplier: selectedGroup
-          ? getDynamicGroupRatio(props.model, selectedGroup)
-          : getDynamicDisplayGroupRatio(props.model),
+        // Dynamic expression coefficients are final platform prices.
+        groupRatioMultiplier: 1,
       })
     : null
 
@@ -267,7 +264,7 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
                               showRechargePrice
                                 ? (price * priceRate) / usdExchangeRate
                                 : price,
-                              { digitsLarge: 4, digitsSmall: 6, abbreviate: false }
+                              { digitsLarge: 5, digitsSmall: 5, abbreviate: false }
                             )}
                           </span>
                         </span>

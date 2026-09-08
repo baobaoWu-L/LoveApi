@@ -188,8 +188,8 @@ export function formatPrice(
 
   const price = priceInUSD / TOKEN_UNIT_DIVISORS[tokenUnit]
   return formatCurrencyFromUSD(price, {
-    digitsLarge: 4,
-    digitsSmall: 6,
+    digitsLarge: 5,
+    digitsSmall: 5,
     abbreviate: false,
   })
 }
@@ -223,8 +223,8 @@ export function formatGroupPrice(
 
   const price = priceInUSD / TOKEN_UNIT_DIVISORS[tokenUnit]
   return formatCurrencyFromUSD(price, {
-    digitsLarge: 4,
-    digitsSmall: 6,
+    digitsLarge: 5,
+    digitsSmall: 5,
     abbreviate: false,
   })
 }
@@ -234,18 +234,19 @@ export function formatGroupPrice(
  */
 export function formatFixedPrice(
   model: PricingModel,
-  group: string,
+  _group: string,
   showWithRecharge = false,
   priceRate = 1,
   usdExchangeRate = 1,
-  groupRatio: Record<string, number>
+  _groupRatio: Record<string, number>
 ): string {
   if (model.quota_type !== QUOTA_TYPE_VALUES.REQUEST) {
     return '-'
   }
 
-  const ratio = groupRatio[group] || 1
-  let priceInUSD = (model.model_price || 0) * ratio
+  // ModelPrice is the final platform USD price under scheme A. Group ratios
+  // are not applied a second time.
+  let priceInUSD = model.model_price || 0
 
   priceInUSD = applyRechargeRate(
     priceInUSD,
@@ -255,8 +256,8 @@ export function formatFixedPrice(
   )
 
   return formatCurrencyFromUSD(priceInUSD, {
-    digitsLarge: 4,
-    digitsSmall: 4,
+    digitsLarge: 5,
+    digitsSmall: 5,
     abbreviate: false,
   })
 }
@@ -274,13 +275,8 @@ export function formatRequestPrice(
     return '-'
   }
 
-  const enableGroups = Array.isArray(model.enable_groups)
-    ? model.enable_groups
-    : []
-  const groupRatio = model.group_ratio || {}
-  const minRatio = getMinGroupRatio(enableGroups, groupRatio)
-
-  let priceInUSD = (model.model_price || 0) * minRatio
+  // ModelPrice is already the final platform USD price.
+  let priceInUSD = model.model_price || 0
 
   priceInUSD = applyRechargeRate(
     priceInUSD,
@@ -290,8 +286,8 @@ export function formatRequestPrice(
   )
 
   return formatCurrencyFromUSD(priceInUSD, {
-    digitsLarge: 4,
-    digitsSmall: 4,
+    digitsLarge: 5,
+    digitsSmall: 5,
     abbreviate: false,
   })
 }

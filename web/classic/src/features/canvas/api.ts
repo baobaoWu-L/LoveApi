@@ -20,7 +20,7 @@ import axios from 'axios'
 import { fetchActiveChatKey } from '@/features/chat/hooks/use-active-chat-key'
 import type { GenerateImagePayload, GeneratedImage, ImageResponseData } from './types'
 
-// 供前端门槛提示复用：无可用 API Key 时抛出，UI 据此提示「先创建 API Key」
+// Reuse the client-side gate: throw when no usable API key is available.
 export { fetchActiveChatKey as getGenerationKey }
 
 /**
@@ -54,7 +54,9 @@ export async function editImage(
 ): Promise<ImageResponseData> {
   const key = apiKey || (await fetchActiveChatKey())
   const match = referenceDataUrl.match(/^data:([^;]+);base64,(.+)$/)
-  if (!match) throw new Error('参考图格式无效，请重新上传图片')
+  if (!match) {
+    throw new Error('Invalid reference image format. Please upload the image again.')
+  }
   const binary = atob(match[2])
   const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0))
   const blob = new Blob([bytes], { type: match[1] || 'image/png' })
@@ -109,7 +111,8 @@ export async function getCanvasHistoryImage(imageId: string): Promise<string> {
   return await new Promise<string>((resolve, reject) => {
     const reader = new FileReader()
     reader.onload = () => resolve(String(reader.result))
-    reader.onerror = () => reject(reader.error || new Error('读取历史图片失败'))
+    reader.onerror = () =>
+      reject(reader.error || new Error('Failed to read the historical image.'))
     reader.readAsDataURL(res.data)
   })
 }

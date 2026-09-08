@@ -513,7 +513,7 @@ function CodeSamplesSection(props: {
 
   const code = buildSample(lang, activeEndpoint.type, {
     baseUrl,
-    apiKeyEnv: 'LoveApi_Key',
+    apiKeyEnv: 'LovebreakerApi_Key',
     modelName: props.model.model_name || '',
     endpointType: activeEndpoint.type,
     endpointPath: activeEndpoint.path,

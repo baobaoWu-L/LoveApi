@@ -26,7 +26,7 @@ import {
 const defaultSiteSettings: SiteSettings = {
   'theme.frontend': 'default',
   Notice: '',
-  SystemName: 'Love API',
+  SystemName: 'LovebreakerApi',
   Logo: '',
   Footer: '',
   About: '',

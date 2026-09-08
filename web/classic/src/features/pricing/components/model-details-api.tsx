@@ -85,6 +85,7 @@ type SampleContext = {
   modelName: string
   endpointType: string
   endpointPath: string
+  isChinese: boolean
 }
 
 function buildChatSample(lang: Lang, ctx: SampleContext): string {
@@ -489,7 +490,7 @@ function buildOpenAIResponseSample(lang: Lang, ctx: SampleContext): string {
   ].join('\n')
 }
 
-// 从 endpointMap 取真实路径，未配置则用平台真实回退端点
+// Resolve the endpoint path, falling back to the platform endpoint when needed.
 function protoPath(
   endpointMap: Record<string, { path?: string; method?: string }>,
   type: string,
@@ -504,9 +505,8 @@ function protoPath(
   return p
 }
 
-// 按模型真实支持的协议返回：读取后端 supported_endpoint_types 驱动。
-// 这样「支持 openai 的只显示 openai，支持 openai+anthropic 的显示两个」与后端完全一致。
-// 若后端未配置端点（空数组），回退到垫出 OpenAI 聊天端点。
+// Render only protocols declared by the backend for this model.
+// If no endpoint metadata is available, fall back to the OpenAI chat endpoint.
 const FALLBACK_PATH: Record<string, string> = {
   openai: '/v1/chat/completions',
   'openai-response': '/v1/responses',
@@ -538,7 +538,7 @@ function resolveModelProtocols(
   const declaredTypes = model.supported_endpoint_types ?? []
   const modelName = model.model_name || ''
   const types = declaredTypes
-  // 没有后端声明时不生成示例，避免展示无法确认的虚拟端点。
+  // Do not generate examples for undeclared endpoints.
   if (types.length === 0) {
     return []
   }
@@ -575,15 +575,12 @@ function buildSample(
   if (endpointType === 'image-generation' || endpointType === 'images-edits')
     return buildImageSample(lang, ctx)
   if (endpointType === 'openai-video') return buildVideoSample(lang, ctx)
-  if (endpointType === 'anthropic') return buildAnthropicSample(lang, ctx) // 兼容保留，不作为可用协议展示
+  if (endpointType === 'anthropic') return buildAnthropicSample(lang, ctx) // Kept for compatibility.
   return buildChatSample(lang, ctx)
 }
 
-// cc-switch 供应商配置（开源切换器）：本质是切换不同供应商配置。
-// 切换供应商时会把该配置写入要生效的 CLI 配置文件（Claude Code / Codex 等）。
-// api = 本项目端点地址；key = 本项目接口密钥；model = 当前模型；remark 说明连接自己的后台。
-// 返回「一键接入 Codex + 一键接入 Claude Code」，每段 = 编码完整 config 的 ccswitch URL + 完整配置参考块。
-// 保证「用户选的哪个模型，真实调用的就是哪个模型」，避免二次手动粘贴。
+// Build CC Switch provider configuration links and complete reference blocks.
+// The selected model is embedded so the imported configuration calls that model.
 function buildCcSwitchSample(ctx: SampleContext): string {
   const m = ctx.modelName || 'gpt-5.6-sol'
 
@@ -597,7 +594,7 @@ function buildCcSwitchSample(ctx: SampleContext): string {
     `default_subagent_reasoning_effort = "medium"`,
     ``,
     `[model_providers.loveapi]`,
-    `name = "Love API"`,
+    `name = "LovebreakerApi"`,
     `base_url = "${ctx.baseUrl}/v1"`,
     `wire_api = "responses"`,
     `requires_openai_auth = true`,
@@ -621,7 +618,7 @@ function buildCcSwitchSample(ctx: SampleContext): string {
   )
 
   const codexCcsUrl = [
-    `ccswitch://v1/import?resource=provider&app=codex&name=LoveApi`,
+    `ccswitch://v1/import?resource=provider&app=codex&name=LovebreakerApi`,
     `endpoint=${ctx.baseUrl}/v1`,
     `apiKey=<YOUR_API_KEY>`,
     `model=${m}`,
@@ -631,7 +628,7 @@ function buildCcSwitchSample(ctx: SampleContext): string {
   ].join('&')
 
   const claudeCcsUrl = [
-    `ccswitch://v1/import?resource=provider&app=claude&name=LoveApi`,
+    `ccswitch://v1/import?resource=provider&app=claude&name=LovebreakerApi`,
     `endpoint=${ctx.baseUrl}`,
     `apiKey=<YOUR_API_KEY>`,
     `model=${m}`,
@@ -641,16 +638,24 @@ function buildCcSwitchSample(ctx: SampleContext): string {
   ].join('&')
 
   return [
-    `# ① 一键接入 Codex（endpoint 需带 /v1）`,
+    ctx.isChinese
+      ? `# ① 一键接入 Codex（endpoint 需带 /v1）`
+      : `# ① One-click import Codex (endpoint must include /v1)`,
     codexCcsUrl,
     ``,
-    `# ② Codex 完整配置参考（粘贴到 ~/.codex/config.toml，用 codex -p loveapi 启动）`,
+    ctx.isChinese
+      ? `# ② Codex 完整配置参考（粘贴到 ~/.codex/config.toml，用 codex -p loveapi 启动）`
+      : `# ② Codex full config reference (paste into ~/.codex/config.toml and start with codex -p loveapi)`,
     codexToml,
     ``,
-    `# ③ 一键接入 Claude Code（endpoint 不带 /v1）`,
+    ctx.isChinese
+      ? `# ③ 一键接入 Claude Code（endpoint 不带 /v1）`
+      : `# ③ One-click import Claude Code (endpoint must not include /v1)`,
     claudeCcsUrl,
     ``,
-    `# ④ Claude Code 完整配置参考（粘贴到 ~/.claude/settings.json）`,
+    ctx.isChinese
+      ? `# ④ Claude Code 完整配置参考（粘贴到 ~/.claude/settings.json）`
+      : `# ④ Claude Code full config reference (paste into ~/.claude/settings.json)`,
     claudeSettings,
   ].join('\n')
 }
@@ -659,8 +664,8 @@ function buildCcSwitchSample(ctx: SampleContext): string {
 // Codex subagent lock note
 // ---------------------------------------------------------------------------
 
-// Codex（ChatGPT 桌面端 / CLI）接入提示：主对话与子代理默认可能用不同模型。
-// 想让主对话 + 子模型都用同一个模型，就把下面配置写入 ~/.codex/config.toml 并用 codex -p loveapi 启动。
+// Codex integration note: the main conversation and subagents may use different models.
+// Pin both to one model through ~/.codex/config.toml when needed.
 function CodexSubagentNote(props: { modelName: string }) {
   const { t } = useTranslation()
   const m = props.modelName || 'gpt-5.6-sol'
@@ -704,16 +709,17 @@ function CodeSamplesSection(props: {
   model: PricingModel
   endpointMap: Record<string, { path?: string; method?: string }>
 }) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const { status } = useStatus()
+  const isChinese = (i18n.resolvedLanguage || i18n.language || '').startsWith('zh')
 
-  // 中转站对外地址：管理端可能运行在 localhost，不能把管理端地址当 API 地址。
+  // Resolve the public gateway address instead of using an admin localhost URL.
   const baseUrl =
     (status?.server_address as string) ||
     (typeof window !== 'undefined' ? window.location.origin : '')
 
   const endpoints = useMemo(() => {
-    // 按后端 supported_endpoint_types 真实展示协议，并附 ccswitch 一键接入项
+    // Render backend-declared protocols and include CC Switch import options.
     const protocols = resolveModelProtocols(props.model, props.endpointMap)
     return [...protocols, { type: 'ccswitch', path: '' }]
   }, [props.model, props.endpointMap])
@@ -733,10 +739,11 @@ function CodeSamplesSection(props: {
 
   const code = buildSample(lang, activeEndpoint.type, {
     baseUrl,
-    apiKeyEnv: 'LoveApi_Key',
+    apiKeyEnv: 'LovebreakerApi_Key',
     modelName: props.model.model_name || '',
     endpointType: activeEndpoint.type,
     endpointPath: activeEndpoint.path,
+    isChinese,
   })
 
   return (
@@ -791,12 +798,12 @@ function CodeSamplesSection(props: {
 
       {activeEndpoint.type === 'openai' && (
         <p className='mt-2 rounded-md border border-sky-300/70 bg-sky-50/70 p-2.5 text-xs leading-relaxed text-sky-700 dark:border-sky-500/30 dark:bg-sky-500/10 dark:text-sky-300'>
-          ℹ 该模型走 <strong>OpenAI 兼容协议</strong>（{' '}
+          ℹ {t('This model uses the')} <strong>{t('OpenAI-compatible protocol')}</strong> ({' '}
           <code className='bg-muted rounded px-1 py-0.5 font-mono text-[10px]'>
             {activeEndpoint.path}
           </code>{' '}
-          ），可直接用 <code className='bg-muted rounded px-1 py-0.5 font-mono text-[10px]'>openai</code>{' '}
-          SDK 调用；若需 Anthropic 原生协议，请切换到支持它的端点标签（如有）。
+          ) {t('Use the')} <code className='bg-muted rounded px-1 py-0.5 font-mono text-[10px]'>openai</code>{' '}
+          {t('SDK to call it directly. For the native Anthropic protocol, switch to a compatible endpoint if available.')}
         </p>
       )}
 
@@ -1155,7 +1162,7 @@ function SectionTitle(props: {
   children: React.ReactNode
   icon?: React.ComponentType<{ className?: string }>
 }) {
-  // 按需求去掉 AI 风格图标，只保留纯文字标题
+  // Keep the heading text-only as required by the design.
   return (
     <h3 className='text-foreground mb-3 text-sm font-semibold'>{props.children}</h3>
   )

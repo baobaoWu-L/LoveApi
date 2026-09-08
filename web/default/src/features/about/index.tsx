@@ -58,7 +58,7 @@ function EmptyAboutState() {
           </div>
           <div className='space-y-4 text-sm'>
             <p>
-              {t('Love API Project Repository:')}{' '}
+              {t('LovebreakerApi Project Repository:')}{' '}
               <a
                 href='https://github.com/QuantumNous/new-api'
                 target='_blank'
@@ -75,7 +75,7 @@ function EmptyAboutState() {
                 rel='noopener noreferrer'
                 className='text-primary hover:underline'
               >
-                {t('LoveAPI')}
+                {t('LovebreakerApi')}
               </a>{' '}
               © {currentYear}{' '}
               <a
@@ -125,9 +125,9 @@ function EmptyAboutState() {
 }
 
 export function About() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const { data, isLoading } = useQuery({
-    queryKey: ['about-content'],
+    queryKey: ['about-content', i18n.language],
     queryFn: getAboutContent,
   })
   const rawContent = data?.data?.trim() ?? ''

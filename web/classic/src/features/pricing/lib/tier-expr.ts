@@ -48,6 +48,10 @@ export type VisualConfig = {
   tiers: VisualTier[]
 }
 
+function roundPrice(value: number): number {
+  return Number.parseFloat(value.toFixed(5))
+}
+
 export function getTierCacheMode(
   tier: Partial<VisualTier> | null | undefined
 ): CacheMode {
@@ -63,18 +67,18 @@ export function normalizeVisualTier(
 ): VisualTier {
   return {
     label: tier.label ?? '',
-    input_unit_cost: Number(tier.input_unit_cost) || 0,
-    output_unit_cost: Number(tier.output_unit_cost) || 0,
+    input_unit_cost: roundPrice(Number(tier.input_unit_cost) || 0),
+    output_unit_cost: roundPrice(Number(tier.output_unit_cost) || 0),
     cache_mode: getTierCacheMode(tier),
     conditions: Array.isArray(tier.conditions) ? tier.conditions : [],
     ...tier,
-    cache_read_unit_cost: Number(tier.cache_read_unit_cost) || 0,
-    cache_create_unit_cost: Number(tier.cache_create_unit_cost) || 0,
-    cache_create_1h_unit_cost: Number(tier.cache_create_1h_unit_cost) || 0,
-    image_unit_cost: Number(tier.image_unit_cost) || 0,
-    image_output_unit_cost: Number(tier.image_output_unit_cost) || 0,
-    audio_input_unit_cost: Number(tier.audio_input_unit_cost) || 0,
-    audio_output_unit_cost: Number(tier.audio_output_unit_cost) || 0,
+    cache_read_unit_cost: roundPrice(Number(tier.cache_read_unit_cost) || 0),
+    cache_create_unit_cost: roundPrice(Number(tier.cache_create_unit_cost) || 0),
+    cache_create_1h_unit_cost: roundPrice(Number(tier.cache_create_1h_unit_cost) || 0),
+    image_unit_cost: roundPrice(Number(tier.image_unit_cost) || 0),
+    image_output_unit_cost: roundPrice(Number(tier.image_output_unit_cost) || 0),
+    audio_input_unit_cost: roundPrice(Number(tier.audio_input_unit_cost) || 0),
+    audio_output_unit_cost: roundPrice(Number(tier.audio_output_unit_cost) || 0),
   }
 }
 

@@ -174,7 +174,7 @@ export function HeaderNavigationSection({
     {
       key: 'apiDoc',
       title: t('API Documentation'),
-      description: 'API 接口文档和技术指南。',
+      description: 'API documentation and technical guides.',
     },
   ]
 

@@ -30,7 +30,7 @@ import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard'
 import { cn } from '@/lib/utils'
 import { ChevronDown, ChevronRight, Copy, Search, List } from 'lucide-react'
 
-// ===== 章节与菜单数据 =====
+// ===== Section and navigation data =====
 
 type SectionId =
   | 'intro'
@@ -109,7 +109,7 @@ const NAV_GROUPS: NavGroup[] = [
   },
 ]
 
-// ===== 滚动定位：当前高亮章节 =====
+// ===== Scroll tracking for the active section =====
 
 function useActiveSection(ids: readonly string[]) {
   const [active, setActive] = useState<string>(ids[0])
@@ -132,7 +132,7 @@ function useActiveSection(ids: readonly string[]) {
   return active
 }
 
-// ===== 代码块组件 =====
+// ===== Code block component =====
 
 function CodeBlock({ code, lang = 'json' }: { code: string; lang?: string }) {
   const { copyToClipboard } = useCopyToClipboard()
@@ -161,7 +161,7 @@ function CodeBlock({ code, lang = 'json' }: { code: string; lang?: string }) {
   )
 }
 
-// ===== 章节组件 =====
+// ===== Section component =====
 
 function Section({
   id,
@@ -196,7 +196,7 @@ function ConfigField({ code, text }: { code: string; text: string }) {
   )
 }
 
-// ===== Codex 子模型锁定注意事项（模型广场同款，统一格式）=====
+// ===== Codex subagent model note =====
 
 function CodexSubagentNote() {
   const { t } = useTranslation()
@@ -225,7 +225,7 @@ model_provider = "loveapi"`}
   )
 }
 
-// ===== 端点折叠卡片 =====
+// ===== Collapsible endpoint card =====
 
 function EndpointCard({
   method,
@@ -273,25 +273,29 @@ function EndpointCard({
   )
 }
 
-// ===== 主页面 =====
+// ===== Main page =====
 
 export function ApiDoc() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const { status } = useStatus()
   const [query, setQuery] = useState('')
   const [mobileOpen, setMobileOpen] = useState(false)
   const active = useActiveSection(SECTION_IDS)
+  const isChinese = (i18n.resolvedLanguage || i18n.language || '').startsWith('zh')
 
-  // 中转站对外地址：文档中的所有配置示例都指向这个真实可接入的地址
+  // Use the public gateway address in every configuration example.
   const serverAddress =
     (status?.server_address as string) ||
     (typeof window !== 'undefined' ? window.location.origin : '')
 
-  // 一键接入 Codex / Claude Code：把完整配置编码进 ccswitch deep link，
-  // 保证「用户选的哪个模型，真实调用的就是哪个模型」，避免二次手动粘贴。
+  // Encode complete Codex and Claude Code configurations in CC Switch links.
   const codexDefaultModel = 'gpt-5.6-sol'
   const claudeDefaultModel = 'claude-sonnet-4-20250514'
   const codexConfigToml = [
+    isChinese
+      ? '# 切换模型无需改此文件：直接在 Codex 桌面端选择，选中哪个就用哪个（不会自动路由到其它模型）'
+      : '# No need to edit this file when switching models: choose a model in the Codex desktop app and it will use that model directly',
+    isChinese ? '# 下面 model 仅为默认值' : '# The model below is only the default value',
     `model = "${codexDefaultModel}"`,
     `model_provider = "loveapi"`,
     `model_reasoning_effort = "medium"`,
@@ -300,8 +304,14 @@ export function ApiDoc() {
     `default_subagent_model = "${codexDefaultModel}"`,
     `default_subagent_reasoning_effort = "medium"`,
     ``,
+    isChinese ? '# --- 缓存优化配置 ---' : '# --- Cache optimization ---',
+    `cache_size_mb = 512`,
+    `cache_ttl = "30m"`,
+    `smart_cache = true`,
+    `cache_compression = true`,
+    ``,
     `[model_providers.loveapi]`,
-    `name = "Love API"`,
+    `name = "LovebreakerApi"`,
     `base_url = "${serverAddress}/v1"`,
     `wire_api = "responses"`,
     `requires_openai_auth = true`,
@@ -314,6 +324,9 @@ export function ApiDoc() {
     `search_tool = true`,
     `steer = true`,
     ``,
+    isChinese
+      ? '# --- 固定只用一个模型：用 codex -p loveapi 启用 ---'
+      : '# --- Pin a single model: start with codex -p loveapi ---',
     `[profiles.loveapi]`,
     `model = "${codexDefaultModel}"`,
     `model_provider = "loveapi"`,
@@ -322,7 +335,7 @@ export function ApiDoc() {
     {
       env: {
         ANTHROPIC_BASE_URL: serverAddress,
-        ANTHROPIC_AUTH_TOKEN: 'sk-your-loveapi-key',
+        ANTHROPIC_AUTH_TOKEN: 'sk-your-lovebreakerapi-key',
         ANTHROPIC_MODEL: claudeDefaultModel,
         ANTHROPIC_SMALL_FAST_MODEL: 'claude-3-5-haiku-20241022',
       },
@@ -331,18 +344,18 @@ export function ApiDoc() {
     2
   )
   const codexCcsUrl = [
-    `ccswitch://v1/import?resource=provider&app=codex&name=LoveApi`,
+    `ccswitch://v1/import?resource=provider&app=codex&name=LovebreakerApi`,
     `endpoint=${serverAddress}/v1`,
-    `apiKey=sk-your-loveapi-key`,
+    `apiKey=sk-your-lovebreakerapi-key`,
     `model=${codexDefaultModel}`,
     `homepage=${serverAddress}`,
     `enabled=true`,
     `extraConfig=${encodeURIComponent(codexConfigToml)}`,
   ].join('&')
   const claudeCcsUrl = [
-    `ccswitch://v1/import?resource=provider&app=claude&name=LoveApi`,
+    `ccswitch://v1/import?resource=provider&app=claude&name=LovebreakerApi`,
     `endpoint=${serverAddress}`,
-    `apiKey=sk-your-loveapi-key`,
+    `apiKey=sk-your-lovebreakerapi-key`,
     `model=${claudeDefaultModel}`,
     `homepage=${serverAddress}`,
     `enabled=true`,
@@ -367,7 +380,7 @@ export function ApiDoc() {
       <div className='relative'>
         <PastelBackdrop />
 
-        {/* 移动端菜单按钮 */}
+        {/* Mobile navigation toggle */}
         <div className='sticky top-16 z-30 px-4 pt-2 md:hidden'>
           <button
             onClick={() => setMobileOpen((v) => !v)}
@@ -398,7 +411,7 @@ export function ApiDoc() {
         <div className='mx-auto w-full max-w-[1400px] px-4 pt-8 pb-16 md:px-6 lg:px-8'>
           <GsapReveal>
             <div className='grid gap-10 lg:grid-cols-[250px_minmax(0,1fr)] xl:grid-cols-[250px_minmax(0,1fr)_200px]'>
-              {/* 左侧菜单栏 */}
+              {/* Left navigation */}
               <aside data-reveal className='hidden lg:block'>
                 <div className='sticky top-24 max-h-[calc(100dvh-7rem)] space-y-4 overflow-y-auto pr-2'>
                   <div className='flex items-center gap-2'>
@@ -448,10 +461,10 @@ export function ApiDoc() {
                 </div>
               </aside>
 
-              {/* 正文 */}
+              {/* Main content */}
               <main className='min-w-0'>
                 <div className='mx-auto max-w-3xl'>
-                  {/* 标题区 */}
+                  {/* Header */}
                   <header
                     data-reveal
                     className='space-y-4 border-b border-border/40 pb-8'
@@ -461,17 +474,17 @@ export function ApiDoc() {
                       API Reference
                     </span>
                     <h1 className='text-4xl leading-tight font-bold tracking-tight sm:text-5xl'>
-                      {t('LoveAPI API documentation')}
+                      {t('LovebreakerApi API documentation')}
                     </h1>
                     <p className='text-muted-foreground max-w-2xl leading-relaxed'>
                       {t('A unified AI model API gateway, fully compatible with the OpenAI protocol. One integration connects leading OpenAI, Anthropic (Claude), DeepSeek, and Qwen models without separate adapters.')}
                     </p>
                   </header>
 
-                  {/* 1. 引言 */}
+                  {/* 1. Introduction */}
                   <Section id='intro' icon='' title={t(SECTION_TITLES.intro)}>
                     <p className='text-muted-foreground text-sm leading-relaxed'>
-                      {t('LoveAPI provides an OpenAI-compatible API. Replace your client Base URL and API key to call multiple models through one protocol with automatic channel routing.')}
+                      {t('LovebreakerApi provides an OpenAI-compatible API. Replace your client Base URL and API key to call multiple models through one protocol with automatic channel routing.')}
                     </p>
                     <div className='grid gap-3 sm:grid-cols-3'>
                       {[
@@ -492,14 +505,14 @@ export function ApiDoc() {
                     </div>
                   </Section>
 
-                  {/* 2. 快速接入 */}
+                  {/* 2. Quick start */}
                   <Section
                     id='quick-start'
                     icon=''
                     title={t(SECTION_TITLES['quick-start'])}
                   >
                     <p className='text-muted-foreground text-sm leading-relaxed'>
-                      {t('Replace the Base URL and Authorization header in your existing API calls with your LoveAPI credentials.')}
+                      {t('Replace the Base URL and Authorization header in your existing API calls with your LovebreakerApi credentials.')}
                     </p>
                     <Card className='border-primary/20 bg-primary/5 p-4 space-y-3'>
                       <div className='flex flex-wrap items-center justify-between gap-4'>
@@ -526,14 +539,14 @@ export function ApiDoc() {
                     </div>
                   </Section>
 
-                  {/* 3. Codex 配置 */}
+                  {/* 3. Codex configuration */}
                   <Section
                     id='codex'
                     icon=''
                     title={t(SECTION_TITLES.codex)}
                   >
                     <p className='text-muted-foreground text-sm leading-relaxed'>
-                      {t('Configure LoveAPI as the Codex (ChatGPT) desktop or CLI provider in')}{' '}
+                      {t('Configure LovebreakerApi as the Codex (ChatGPT) desktop or CLI provider in')}{' '}
                       <code className='bg-muted rounded px-1 text-xs'>~/.codex/config.toml</code>{' '}
                       {t('and')}{' '}
                       <code className='bg-muted rounded px-1 text-xs'>~/.codex/auth.json</code>{' '}
@@ -543,28 +556,28 @@ export function ApiDoc() {
                       {t('① Model provider and runtime configuration')}
                     </div>
                     <CodeBlock
-                      code={`# 切换模型无需改此文件：直接在 Codex 桌面端选择，选中哪个就用哪个（不会自动路由到其它模型）
-# 下面 model 仅为默认值
+                      code={`${isChinese ? '# 切换模型无需改此文件：直接在 Codex 桌面端选择，选中哪个就用哪个（不会自动路由到其它模型）' : '# No need to edit this file when switching models: choose a model in the Codex desktop app and it will use that model directly'}
+${isChinese ? '# 下面 model 仅为默认值' : '# The model below is only the default value'}
 model = "gpt-5.6-sol"
 model_provider = "loveapi"
 model_reasoning_effort = "medium"
 
-# --- 关键：把子任务模型也固定为同一个，避免 Codex 调用其它模型（如 gpt-5.6-terra）---
-# /review（代码审查）用的模型，默认可能与主模型不同、独立生效
+${isChinese ? '# --- 关键：把子任务模型也固定为同一个，避免 Codex 调用其它模型（如 gpt-5.6-terra）---' : '# --- Key: keep subtask models pinned to the same one, so Codex does not call a different model (for example gpt-5.6-terra) ---'}
+${isChinese ? '# /review（代码审查）用的模型，默认可能与主模型不同、独立生效' : '# /review uses its own model and may differ from the main one by default'}
 review_model = "gpt-5.6-sol"
-# 多代理 / 子代理（explorer、worker 等）的默认模型，不跟随上面的 model
+${isChinese ? '# 多代理 / 子代理（explorer、worker 等）的默认模型，不跟随上面的 model' : '# Default model for multi-agent / subagent tasks (explorer, worker, etc.); it does not follow the model above'}
 [agents]
 default_subagent_model = "gpt-5.6-sol"
 default_subagent_reasoning_effort = "medium"
 
-# --- 缓存优化配置 ---
+${isChinese ? '# --- 缓存优化配置 ---' : '# --- Cache optimization ---'}
 cache_size_mb = 512
 cache_ttl = "30m"
 smart_cache = true
 cache_compression = true
 
 [model_providers.loveapi]
-name = "Love API"
+name = "LovebreakerApi"
 base_url = "${serverAddress}/v1"
 wire_api = "responses"
 requires_openai_auth = true
@@ -577,7 +590,7 @@ multi_agent = true
 search_tool = true
 steer = true
 
-# --- 固定只用一个模型：用 codex -p loveapi 启用 ---
+${isChinese ? '# --- 固定只用一个模型：用 codex -p loveapi 启用 ---' : '# --- Pin a single model: start with codex -p loveapi ---'}
 [profiles.loveapi]
 model = "gpt-5.6-sol"
 model_provider = "loveapi"`}
@@ -589,7 +602,7 @@ model_provider = "loveapi"`}
                     <CodeBlock
                       code={JSON.stringify(
                         {
-                          OPENAI_API_KEY: 'sk-your-loveapi-key',
+                          OPENAI_API_KEY: 'sk-your-lovebreakerapi-key',
                         },
                         null,
                         2
@@ -624,7 +637,7 @@ model_provider = "loveapi"`}
                     <div className='text-xs text-muted-foreground space-y-1'>
                       <ConfigField
                         code='base_url'
-                        text={t('LoveAPI OpenAI-compatible endpoint; append /v1')}
+                        text={t('LovebreakerApi OpenAI-compatible endpoint; append /v1')}
                       />
                       <ConfigField
                         code='wire_api'
@@ -648,14 +661,14 @@ model_provider = "loveapi"`}
                     </div>
                   </Section>
 
-                  {/* 4. Claude 配置 */}
+                  {/* 4. Claude configuration */}
                   <Section
                     id='claude'
                     icon=''
                     title={t(SECTION_TITLES.claude)}
                   >
                     <p className='text-muted-foreground text-sm leading-relaxed'>
-                      {t('Point Claude Code to LoveAPI through environment variables in')}{' '}
+                      {t('Point Claude Code to LovebreakerApi through environment variables in')}{' '}
                       <code className='bg-muted rounded px-1 text-xs'>~/.claude/settings.json</code>:
                     </p>
                     <CodeBlock
@@ -663,7 +676,7 @@ model_provider = "loveapi"`}
                         {
                           env: {
                             ANTHROPIC_BASE_URL: serverAddress,
-                            ANTHROPIC_AUTH_TOKEN: 'sk-your-loveapi-key',
+                            ANTHROPIC_AUTH_TOKEN: 'sk-your-lovebreakerapi-key',
                             ANTHROPIC_MODEL: 'claude-sonnet-4-20250514',
                             ANTHROPIC_SMALL_FAST_MODEL:
                               'claude-3-5-haiku-20241022',
@@ -676,11 +689,11 @@ model_provider = "loveapi"`}
                     <div className='text-xs text-muted-foreground space-y-1'>
                       <ConfigField
                         code='ANTHROPIC_BASE_URL'
-                        text={t('LoveAPI service address without the /v1 suffix')}
+                        text={t('LovebreakerApi service address without the /v1 suffix')}
                       />
                       <ConfigField
                         code='ANTHROPIC_AUTH_TOKEN'
-                        text={t('Your LoveAPI key')}
+                        text={t('Your LovebreakerApi key')}
                       />
                       <ConfigField
                         code='ANTHROPIC_MODEL'
@@ -689,25 +702,25 @@ model_provider = "loveapi"`}
                     </div>
                   </Section>
 
-                  {/* 5. DeepSeek 配置 */}
+                  {/* 5. DeepSeek configuration */}
                   <Section
                     id='deepseek'
                     icon=''
                     title={t(SECTION_TITLES.deepseek)}
                   >
                     <p className='text-muted-foreground text-sm leading-relaxed'>
-                      {t('DeepSeek uses the OpenAI-compatible protocol; point the official SDK at LoveAPI:')}
+                      {t('DeepSeek uses the OpenAI-compatible protocol; point the official SDK at LovebreakerApi:')}
                     </p>
                     <CodeBlock
                       code={`from openai import OpenAI
 
 client = OpenAI(
-    api_key="sk-your-loveapi-key",
+    api_key="sk-your-lovebreakerapi-key",
     base_url="${serverAddress}/v1",
 )
 
 resp = client.chat.completions.create(
-    model="deepseek-chat",        # 推理用 deepseek-reasoner / deepseek-r1
+    model="deepseek-chat",        ${isChinese ? '# 推理用 deepseek-reasoner / deepseek-r1' : '# use deepseek-reasoner / deepseek-r1 for reasoning'}
     messages=[{"role": "user", "content": "Hello!"}],
 )
 print(resp.choices[0].message.content)`}
@@ -725,7 +738,7 @@ print(resp.choices[0].message.content)`}
                     </div>
                   </Section>
 
-                  {/* 6. Qwen 配置 */}
+                  {/* 6. Qwen configuration */}
                   <Section
                     id='qwen'
                     icon=''
@@ -738,12 +751,12 @@ print(resp.choices[0].message.content)`}
                       code={`from openai import OpenAI
 
 client = OpenAI(
-    api_key="sk-your-loveapi-key",
+    api_key="sk-your-lovebreakerapi-key",
     base_url="${serverAddress}/v1",
 )
 
 resp = client.chat.completions.create(
-    model="qwen-max",             # qwen-plus / qwen-turbo / qwen2.5-72b-instruct
+    model="qwen-max",             ${isChinese ? '# qwen-plus / qwen-turbo / qwen2.5-72b-instruct' : '# qwen-plus / qwen-turbo / qwen2.5-72b-instruct'}
     messages=[{"role": "user", "content": "Hello!"}],
 )
 print(resp.choices[0].message.content)`}
@@ -757,14 +770,14 @@ print(resp.choices[0].message.content)`}
                     </div>
                   </Section>
 
-                  {/* 7. 一键接入 Codex */}
+                  {/* 7. One-click Codex setup */}
                   <Section
                     id='ccswitch-codex'
                     icon=''
                     title={t(SECTION_TITLES['ccswitch-codex'])}
                   >
                     <p className='text-muted-foreground text-sm leading-relaxed'>
-                      {t('One-click import Love API as a Codex provider via CC Switch')}
+                      {t('One-click import LovebreakerApi as a Codex provider via CC Switch')}
                       ({t('for app=codex the endpoint must include')}{' '}
                       <code className='bg-muted rounded px-1 text-xs'>/v1</code>).{' '}
                       {t('The deep link carries the full config; you do not need to copy a config file separately, and whichever model you pick is the one actually called.')}
@@ -783,14 +796,14 @@ print(resp.choices[0].message.content)`}
                     </div>
                   </Section>
 
-                  {/* 8. 一键接入 Claude Code */}
+                  {/* 8. One-click Claude Code setup */}
                   <Section
                     id='ccswitch-claude'
                     icon=''
                     title={t(SECTION_TITLES['ccswitch-claude'])}
                   >
                     <p className='text-muted-foreground text-sm leading-relaxed'>
-                      {t('One-click import Love API as a Claude Code provider via CC Switch')}
+                      {t('One-click import LovebreakerApi as a Claude Code provider via CC Switch')}
                       ({t('for app=claude the endpoint uses the server address')}).{' '}
                       {t('The deep link carries the full config; you do not need to copy a config file separately, and whichever model you pick is the one actually called.')}
                     </p>
@@ -803,10 +816,10 @@ print(resp.choices[0].message.content)`}
                     <CodeBlock code={claudeSettingsJson} lang='json' />
                   </Section>
 
-                  {/* 8. 支持模型 */}
+                  {/* 8. Supported models */}
                   <Section id='models' icon='' title={t(SECTION_TITLES.models)}>
                     <p className='text-muted-foreground text-sm leading-relaxed'>
-                      {t('LoveAPI supports the following model families. Names follow upstream conventions and can be used directly in requests.')}
+                      {t('LovebreakerApi supports the following model families. Names follow upstream conventions and can be used directly in requests.')}
                     </p>
                     <h3 className='pt-2 text-base font-semibold'>
                        {t('ChatGPT (Codex) family')}
@@ -876,7 +889,7 @@ print(resp.choices[0].message.content)`}
                     </Card>
                   </Section>
 
-                  {/* 9. API 端点 */}
+                  {/* 9. API endpoints */}
                   <Section
                     id='endpoints'
                     icon=''
@@ -1002,13 +1015,13 @@ print(resp.choices[0].message.content)`}
                       desc={t('Retrieve video generation task')}
                     >
                       <CodeBlock
-                        code={`curl ${serverAddress}/v1/videos/video_task_id \\\n+  -H "Authorization: Bearer sk-your-loveapi-key"`}
+                        code={`curl ${serverAddress}/v1/videos/video_task_id \\\n+  -H "Authorization: Bearer sk-your-lovebreakerapi-key"`}
                         lang='bash'
                       />
                     </EndpointCard>
                   </Section>
 
-                  {/* 10. 代码示例 */}
+                  {/* 10. Code examples */}
                   <Section
                     id='examples'
                     icon=''
@@ -1018,7 +1031,7 @@ print(resp.choices[0].message.content)`}
                     <CodeBlock
                       code={`curl ${serverAddress}/v1/chat/completions \\
   -H "Content-Type: application/json" \\
-  -H "Authorization: Bearer sk-your-loveapi-key" \\
+  -H "Authorization: Bearer sk-your-lovebreakerapi-key" \\
   -d '{
     "model": "gpt-4o",
     "messages": [{"role": "user", "content": "Hello!"}]
@@ -1030,7 +1043,7 @@ print(resp.choices[0].message.content)`}
                       code={`import OpenAI from 'openai';
 
 const client = new OpenAI({
-  apiKey: '<your-loveapi-key>',
+  apiKey: '<your-lovebreakerapi-key>',
   baseURL: '${serverAddress}/v1'
 });
 
@@ -1044,7 +1057,7 @@ console.log(resp.choices[0].message.content);`}
                     />
                   </Section>
 
-                  {/* 11. 错误码 */}
+                  {/* 11. Error codes */}
                   <Section
                     id='errors'
                     icon=''
@@ -1087,7 +1100,7 @@ console.log(resp.choices[0].message.content);`}
                 </div>
               </main>
 
-              {/* 右侧本页目录 */}
+              {/* On-page navigation */}
               <aside data-reveal className='hidden xl:block'>
                 <div className='sticky top-24 space-y-3'>
                   <div className='text-muted-foreground text-xs font-semibold tracking-wider uppercase'>

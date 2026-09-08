@@ -35,12 +35,12 @@ import { parseUserSettings } from '../lib'
 import type { UserProfile } from '../types'
 
 const LANGUAGE_OPTIONS = [
-  { value: 'zh', label: '简体中文' },
-  { value: 'en', label: 'English' },
-  { value: 'fr', label: 'Français' },
-  { value: 'ru', label: 'Русский' },
-  { value: 'ja', label: '日本語' },
-  { value: 'vi', label: 'Tiếng Việt' },
+  { value: 'zh', labelKey: 'Simplified Chinese' },
+  { value: 'en', labelKey: 'English' },
+  { value: 'fr', labelKey: 'French' },
+  { value: 'ru', labelKey: 'Russian' },
+  { value: 'ja', labelKey: 'Japanese' },
+  { value: 'vi', labelKey: 'Vietnamese' },
 ] as const
 
 function normalizeLanguage(value?: string | null): string {
@@ -133,8 +133,8 @@ export function LanguagePreferencesCard(props: LanguagePreferencesCardProps) {
           <Select
             items={[
               ...LANGUAGE_OPTIONS.map((language) => ({
-                value: language.value,
-                label: language.label,
+              value: language.value,
+                label: t(language.labelKey),
               })),
             ]}
             value={currentLanguage}
@@ -148,7 +148,7 @@ export function LanguagePreferencesCard(props: LanguagePreferencesCardProps) {
               <SelectGroup>
                 {LANGUAGE_OPTIONS.map((language) => (
                   <SelectItem key={language.value} value={language.value}>
-                    {language.label}
+                    {t(language.labelKey)}
                   </SelectItem>
                 ))}
               </SelectGroup>

@@ -276,7 +276,7 @@ func Register(c *gin.Context) {
 			Key:                key,
 			CreatedTime:        time.Now(),
 			AccessedTime:       time.Now(),
-			ExpiredTime:        nil,     // 永不过期
+			ExpiredTime:        nil,    // 永不过期
 			RemainQuota:        500000, // 示例额度
 			UnlimitedQuota:     true,
 			ModelLimitsEnabled: false,
@@ -304,6 +304,7 @@ func GetAllUsers(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
+	setUserBalanceUSD(users)
 
 	pageInfo.SetTotal(int(total))
 	pageInfo.SetItems(users)
@@ -321,6 +322,7 @@ func SearchUsers(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
+	setUserBalanceUSD(users)
 
 	pageInfo.SetTotal(int(total))
 	pageInfo.SetItems(users)
@@ -344,12 +346,31 @@ func GetUser(c *gin.Context) {
 		common.ApiErrorI18n(c, i18n.MsgUserNoPermissionSameLevel)
 		return
 	}
+	setUserBalanceUSD([]*model.User{user})
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "",
 		"data":    user,
 	})
 	return
+}
+
+func setUserBalanceUSD(users []*model.User) {
+	if common.QuotaPerUnit <= 0 {
+		return
+	}
+	for _, user := range users {
+		if user != nil {
+			user.BalanceUSD = float64(user.Quota) / common.QuotaPerUnit
+		}
+	}
+}
+
+func balanceUSD(quota int) float64 {
+	if common.QuotaPerUnit <= 0 {
+		return 0
+	}
+	return float64(quota) / common.QuotaPerUnit
 }
 
 func GenerateAccessToken(c *gin.Context) {
@@ -472,6 +493,7 @@ func GetSelf(c *gin.Context) {
 		"telegram_id":       user.TelegramId,
 		"group":             user.Group,
 		"quota":             user.Quota,
+		"balance_usd":       balanceUSD(user.Quota),
 		"used_quota":        user.UsedQuota,
 		"request_count":     user.RequestCount,
 		"aff_code":          user.AffCode,

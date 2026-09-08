@@ -42,6 +42,34 @@ type Pricing struct {
 	// example image resolution). It is intentionally separate from
 	// ModelPrice, which remains the base/default request price.
 	RequestPricing map[string]float64 `json:"request_pricing,omitempty"`
+	// PublicPricingTiers contains display-only prices for the current user's
+	// effective group. It deliberately contains no billing expression.
+	PublicPricingTiers []PublicPricingTier `json:"pricing_tiers,omitempty"`
+	// PricingGroup identifies the authenticated user's effective group for the
+	// public, already-final pricing response. It is omitted from admin data.
+	PricingGroup string `json:"pricing_group,omitempty"`
+}
+
+type PublicPricingCondition struct {
+	Variable string  `json:"variable"`
+	Operator string  `json:"operator"`
+	Value    float64 `json:"value"`
+}
+
+// PublicPricingTier is safe to expose to the model square. The backend keeps
+// the original expression private and uses it for pre-consume/settlement.
+type PublicPricingTier struct {
+	Label             string                   `json:"label"`
+	Conditions        []PublicPricingCondition `json:"conditions,omitempty"`
+	InputPrice        float64                  `json:"input_price"`
+	OutputPrice       float64                  `json:"output_price"`
+	CacheReadPrice    float64                  `json:"cache_read_price,omitempty"`
+	CacheWritePrice   float64                  `json:"cache_write_price,omitempty"`
+	CacheWrite1hPrice float64                  `json:"cache_write_1h_price,omitempty"`
+	ImagePrice        float64                  `json:"image_price,omitempty"`
+	ImageOutputPrice  float64                  `json:"image_output_price,omitempty"`
+	AudioInputPrice   float64                  `json:"audio_input_price,omitempty"`
+	AudioOutputPrice  float64                  `json:"audio_output_price,omitempty"`
 }
 
 type PricingVendor struct {

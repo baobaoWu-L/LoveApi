@@ -219,7 +219,7 @@ function toNumberOrNull(value: unknown): number | null {
 function formatNumber(value: unknown): string {
   const num = toNumberOrNull(value)
   if (num === null) return ''
-  return Number.parseFloat(num.toFixed(12)).toString()
+  return Number.parseFloat(num.toFixed(5)).toString()
 }
 
 function ratioToBasePrice(ratio: unknown): string {

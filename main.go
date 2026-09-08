@@ -56,7 +56,7 @@ func main() {
 		return
 	}
 
-	common.SysLog("Love Api " + common.Version + " started")
+	common.SysLog("LovebreakerApi " + common.Version + " started")
 	if os.Getenv("GIN_MODE") != "debug" {
 		gin.SetMode(gin.ReleaseMode)
 	}

@@ -128,8 +128,9 @@ function Section({
 // ===== 主页面 =====
 
 export function ApiDoc() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const { status } = useStatus()
+  const isChinese = (i18n.resolvedLanguage || i18n.language || '').startsWith('zh')
   const serverAddress =
     (status?.server_address as string) ||
     (typeof window !== 'undefined' ? window.location.origin : '')
@@ -140,7 +141,7 @@ export function ApiDoc() {
         {/* 标题区 */}
         <div className='text-center space-y-4'>
           <h1 className='text-4xl font-bold tracking-tight'>
-            {t('LoveAPI API documentation')}
+            {t('LovebreakerApi API documentation')}
           </h1>
           <p className='text-muted-foreground mx-auto max-w-2xl leading-relaxed'>
             {t('A unified AI model API gateway, fully compatible with the OpenAI protocol. One integration connects 40+ leading AI providers without separate adapters.')}
@@ -150,7 +151,7 @@ export function ApiDoc() {
         {/* 1. 快速接入 */}
         <Section icon='🚀' title={t('Quick start')}>
           <p className='text-muted-foreground text-sm leading-relaxed'>
-            {t('LoveAPI is fully compatible with the OpenAI API. Replace your existing Base URL and API key with your LoveAPI credentials to get started.')}
+            {t('LovebreakerApi is fully compatible with the OpenAI API. Replace your existing Base URL and API key with your LovebreakerApi credentials to get started.')}
           </p>
 
           <Card className='border-primary/20 bg-primary/5 p-4 space-y-3'>
@@ -179,7 +180,7 @@ export function ApiDoc() {
         {/* 2. 配置文件指南 */}
         <Section icon='⚙️' title={t('Configuration guide')}>
           <p className='text-muted-foreground text-sm leading-relaxed'>
-            {t('LoveAPI is fully compatible with the OpenAI protocol, so you can use it with any client or framework that supports the OpenAI API. Here are configuration examples for common tools:')}
+            {t('LovebreakerApi is fully compatible with the OpenAI protocol, so you can use it with any client or framework that supports the OpenAI API. Here are configuration examples for common tools:')}
           </p>
 
           {/* .claude 配置 */}
@@ -188,7 +189,7 @@ export function ApiDoc() {
           </h3>
           <Card className='p-4 space-y-3'>
             <p className='text-muted-foreground text-sm'>
-              {t('Create .claude/settings.json in your project root and configure LoveAPI as the Claude Code model provider:')}
+              {t('Create .claude/settings.json in your project root and configure LovebreakerApi as the Claude Code model provider:')}
             </p>
             <CodeBlock
               code={JSON.stringify(
@@ -196,8 +197,8 @@ export function ApiDoc() {
                   model: 'claude-sonnet-4-20250514',
                   provider: {
                     id: 'loveapi',
-                    name: 'LoveAPI',
-                    apiKey: '<your-loveapi-key>',
+                    name: 'LovebreakerApi',
+                    apiKey: '<your-lovebreakerapi-key>',
                     baseUrl: serverAddress,
                   },
                 },
@@ -209,8 +210,8 @@ export function ApiDoc() {
               <p><strong>{t('Configuration notes')}:</strong></p>
               <p><code className='bg-muted px-1 rounded'>model</code> — {t('Model to use, such as claude-sonnet-4-20250514 or gpt-4o')}</p>
               <p><code className='bg-muted px-1 rounded'>provider.id</code> — {t('Provider identifier; you may customize it')}</p>
-              <p><code className='bg-muted px-1 rounded'>provider.apiKey</code> — {t('Your LoveAPI token, available in the console')}</p>
-              <p><code className='bg-muted px-1 rounded'>provider.baseUrl</code> — {t('LoveAPI service address')}</p>
+              <p><code className='bg-muted px-1 rounded'>provider.apiKey</code> — {t('Your LovebreakerApi token, available in the console')}</p>
+              <p><code className='bg-muted px-1 rounded'>provider.baseUrl</code> — {t('LovebreakerApi service address')}</p>
             </div>
           </Card>
 
@@ -220,14 +221,14 @@ export function ApiDoc() {
           </h3>
           <Card className='p-4 space-y-3'>
             <p className='text-muted-foreground text-sm'>
-              {t('Create or edit .codex/settings.json in your project root and configure LoveAPI as the Codex CLI model provider:')}
+            {t('Create or edit .codex/settings.json in your project root and configure LovebreakerApi as the Codex CLI model provider:')}
             </p>
             <CodeBlock
               code={JSON.stringify(
                 {
                   provider: 'loveapi',
                   loveapi: {
-                    apiKey: '<your-loveapi-key>',
+                    apiKey: '<your-lovebreakerapi-key>',
                     baseUrl: serverAddress,
                     models: {
                       chat: [
@@ -252,7 +253,7 @@ export function ApiDoc() {
                     'WebSearch',
                     'WebFetch',
                   ],
-                  language: 'zh-CN',
+                  language: isChinese ? 'zh-CN' : 'en-US',
                 },
                 null,
                 2
@@ -260,9 +261,9 @@ export function ApiDoc() {
             />
             <div className='text-xs text-muted-foreground space-y-1'>
               <p><strong>{t('Configuration notes')}:</strong></p>
-              <p><code className='bg-muted px-1 rounded'>provider</code> — {t('Set to "loveapi" to enable the LoveAPI provider')}</p>
-              <p><code className='bg-muted px-1 rounded'>loveapi.apiKey</code> — {t('Your LoveAPI token')}</p>
-              <p><code className='bg-muted px-1 rounded'>loveapi.baseUrl</code> — {t('LoveAPI service address')}</p>
+              <p><code className='bg-muted px-1 rounded'>provider</code> — {t('Set to "loveapi" to enable the LovebreakerApi provider')}</p>
+              <p><code className='bg-muted px-1 rounded'>loveapi.apiKey</code> — {t('Your LovebreakerApi token')}</p>
+              <p><code className='bg-muted px-1 rounded'>loveapi.baseUrl</code> — {t('LovebreakerApi service address')}</p>
               <p><code className='bg-muted px-1 rounded'>loveapi.models</code> — {t('Available models grouped into chat and reasoning')}</p>
               <p><code className='bg-muted px-1 rounded'>allowedTools</code> — {t('Tools that Codex CLI is allowed to use')}</p>
             </div>
@@ -274,7 +275,7 @@ export function ApiDoc() {
           </h3>
           <Card className='p-4 space-y-3'>
             <p className='text-muted-foreground text-sm'>
-              {t('CcSwitch dynamically switches between AI providers. The following example references LoveAPI through CcSwitch:')}
+            {t('CcSwitch dynamically switches between AI providers. The following example references LovebreakerApi through CcSwitch:')}
             </p>
             <CodeBlock
               code={JSON.stringify(
@@ -283,7 +284,7 @@ export function ApiDoc() {
                     loveapi: {
                       type: 'openai-compatible',
                       baseUrl: serverAddress,
-                      apiKey: '<your-loveapi-key>',
+                      apiKey: '<your-lovebreakerapi-key>',
                       models: {
                         'gpt-4o': {
                           maxTokens: 128000,
@@ -322,7 +323,7 @@ export function ApiDoc() {
               <span className='text-base'>📖</span>
               <div className='text-muted-foreground text-xs leading-relaxed'>
                 <strong className='text-foreground'>{t('CcSwitch notes')}:</strong>
-                {t('Use type: "openai-compatible" to declare LoveAPI as an OpenAI-compatible provider. The models field describes capabilities per model, while switchRules route model names with regular expressions.')}
+                {t('Use type: "openai-compatible" to declare LovebreakerApi as an OpenAI-compatible provider. The models field describes capabilities per model, while switchRules route model names with regular expressions.')}
               </div>
             </div>
           </Card>
@@ -343,7 +344,7 @@ export function ApiDoc() {
                 },
                 {
                   title: t('Update configuration values'),
-                  desc: t('Use the examples above and replace apiKey with your LoveAPI token and baseUrl with the server address.'),
+                  desc: t('Use the examples above and replace apiKey with your LovebreakerApi token and baseUrl with the server address.'),
                 },
                 {
                   title: t('Choose a model'),
@@ -371,7 +372,7 @@ export function ApiDoc() {
         {/* 3. 支持模型 */}
         <Section icon='🧠' title={t('Supported models')}>
           <p className='text-muted-foreground text-sm leading-relaxed'>
-            {t('LoveAPI supports the following model families. Names follow upstream conventions and can be used directly in requests.')}
+            {t('LovebreakerApi supports the following model families. Names follow upstream conventions and can be used directly in requests.')}
           </p>
 
           <h3 className='pt-2 text-base font-semibold'>
@@ -627,7 +628,7 @@ export function ApiDoc() {
             desc={t('Retrieve video generation task')}
           >
             <CodeBlock
-              code={`curl ${serverAddress}/v1/videos/video_task_id \\\n+  -H "Authorization: Bearer <your-loveapi-key>"`}
+              code={`curl ${serverAddress}/v1/videos/video_task_id \\\n+  -H "Authorization: Bearer <your-lovebreakerapi-key>"`}
               lang='bash'
             />
           </EndpointCard>
@@ -636,14 +637,14 @@ export function ApiDoc() {
         {/* 5. 代码示例 */}
         <Section icon='💻' title={t('Code examples')}>
           <p className='text-muted-foreground text-sm'>
-            {t('The examples below show how to call LoveAPI from different programming languages.')}
+            {t('The examples below show how to call LovebreakerApi from different programming languages.')}
           </p>
 
           <h3 className='text-sm font-semibold'>cURL</h3>
           <CodeBlock
             code={`curl ${serverAddress}/v1/chat/completions \\
   -H "Content-Type: application/json" \\
-  -H "Authorization: Bearer <your-loveapi-key>" \\
+  -H "Authorization: Bearer <your-lovebreakerapi-key>" \\
   -d '{
     "model": "gpt-4o",
     "messages": [
@@ -658,7 +659,7 @@ export function ApiDoc() {
             code={`from openai import OpenAI
 
 client = OpenAI(
-    api_key="<your-loveapi-key>",
+    api_key="<your-lovebreakerapi-key>",
     base_url="${serverAddress}"
 )
 
@@ -676,7 +677,7 @@ print(response.choices[0].message.content)`}
             code={`import OpenAI from 'openai';
 
 const client = new OpenAI({
-  apiKey: '<your-loveapi-key>',
+  apiKey: '<your-lovebreakerapi-key>',
   baseURL: '${serverAddress}'
 });
 
@@ -693,7 +694,7 @@ console.log(response.choices[0].message.content);`}
         {/* 6. 错误码 */}
         <Section icon='⚠️' title={t('Error codes')}>
           <p className='text-muted-foreground text-sm'>
-            {t('LoveAPI returns standard HTTP status codes and error messages when a request fails.')}
+            {t('LovebreakerApi returns standard HTTP status codes and error messages when a request fails.')}
           </p>
 
           <div className='overflow-hidden rounded-lg border'>

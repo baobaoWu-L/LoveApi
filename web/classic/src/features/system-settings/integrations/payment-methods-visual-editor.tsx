@@ -48,35 +48,31 @@ type PaymentMethodsVisualEditorProps = {
 
 const PAYMENT_TEMPLATES = [
   {
-    name: 'Alipay',
+    nameKey: 'Alipay',
     template: {
       color: 'rgba(var(--semi-blue-5), 1)',
-      name: '支付宝',
       type: 'alipay',
     },
   },
   {
-    name: 'WeChat Pay',
+    nameKey: 'WeChat Pay',
     template: {
       color: 'rgba(var(--semi-green-5), 1)',
-      name: '微信',
       type: 'wxpay',
     },
   },
   {
-    name: 'Stripe',
+    nameKey: 'Stripe',
     template: {
       color: 'rgba(var(--semi-green-5), 1)',
-      name: 'Stripe',
       type: 'stripe',
     },
   },
   {
-    name: 'Custom',
+    nameKey: 'Custom 1',
     template: {
       color: 'black',
       min_topup: '50',
-      name: '自定义1',
       type: 'custom1',
     },
   },
@@ -247,18 +243,21 @@ export function PaymentMethodsVisualEditor({
                 <div className='space-y-1'>
                   {PAYMENT_TEMPLATES.map((item) => (
                     <Button
-                      key={item.name}
+                      key={item.nameKey}
                       type='button'
                       variant='ghost'
                       className='w-full justify-start text-sm'
                       onClick={(e) => {
                         e.preventDefault()
                         e.stopPropagation()
-                        handleInsertTemplate(item.template)
+                        handleInsertTemplate({
+                          ...item.template,
+                          name: t(item.nameKey),
+                        })
                       }}
                     >
                       <Plus className='mr-2 h-3 w-3' />
-                      {item.name}
+                      {t(item.nameKey)}
                     </Button>
                   ))}
                 </div>

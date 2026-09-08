@@ -241,7 +241,7 @@ export function UsageLogsTable({ logCategory }: UsageLogsTableProps) {
                   {isCommon ? (
                     <InlineLogDetails log={log as UsageLog} />
                   ) : (
-                    <InlineTaskDetails log={log as TaskLog} />
+                    <InlineTaskDetails log={log as unknown as TaskLog} />
                   )}
                 </TableCell>
               </TableRow>
@@ -267,7 +267,7 @@ export function UsageLogsTable({ logCategory }: UsageLogsTableProps) {
           return isCommon ? (
             <InlineLogDetails log={log as UsageLog} />
           ) : (
-            <InlineTaskDetails log={log as TaskLog} />
+            <InlineTaskDetails log={log as unknown as TaskLog} />
           )
         },
       }}

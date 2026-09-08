@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Loader2, Mail } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { loginByEmail, sendEmailVerification } from '@/features/auth/api'
 import { Button } from '@/components/ui/button'
@@ -17,6 +18,7 @@ export function EmailCodeLogin({
   onSuccess,
   onError,
 }: EmailCodeLoginProps) {
+  const { t } = useTranslation()
   const [email, setEmail] = useState('')
   const [code, setCode] = useState('')
   const [isSending, setIsSending] = useState(false)
@@ -25,14 +27,14 @@ export function EmailCodeLogin({
 
   async function handleSendCode() {
     if (!email) {
-      toast.error('Please enter your email first')
+      toast.error(t('Please enter your email first'))
       return
     }
     setIsSending(true)
     try {
       const res = await sendEmailVerification(email, turnstileToken, 'login')
       if (res?.success) {
-        toast.success('Verification email sent')
+        toast.success(t('Verification email sent'))
         setSecondsLeft(60)
         const timer = setInterval(() => {
           setSecondsLeft((s) => {
@@ -52,7 +54,7 @@ export function EmailCodeLogin({
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!email || !code) {
-      toast.error('Please enter your email and verification code')
+      toast.error(t('Please enter your email and verification code'))
       return
     }
     setIsSubmitting(true)
@@ -60,18 +62,18 @@ export function EmailCodeLogin({
       const res = await loginByEmail(email, code, turnstileToken)
       if (res?.success) {
         if (res.data && (res.data as { require_2fa?: boolean }).require_2fa) {
-          toast.info('2FA required')
+          toast.info(t('2FA required'))
           onSuccess(null)
           return
         }
         onSuccess(res.data as { id?: number } | null)
-        toast.success('Welcome back!')
+        toast.success(t('Welcome back!'))
       } else {
-        toast.error(res?.message || 'Login failed')
+        toast.error(res?.message || t('Login failed'))
         onError?.(res?.message)
       }
     } catch {
-      toast.error('Login failed')
+      toast.error(t('Login failed'))
     } finally {
       setIsSubmitting(false)
     }
@@ -80,7 +82,7 @@ export function EmailCodeLogin({
   return (
     <form onSubmit={handleSubmit} className='grid gap-4'>
       <div className='grid gap-2'>
-        <Label htmlFor='email-login-email'>Email</Label>
+        <Label htmlFor='email-login-email'>{t('Email')}</Label>
         <Input
           id='email-login-email'
           type='email'
@@ -92,12 +94,12 @@ export function EmailCodeLogin({
       </div>
 
       <div className='grid gap-2'>
-        <Label>Verification code</Label>
+        <Label>{t('Verification code')}</Label>
         <div className='flex items-center gap-2'>
           <Input
             value={code}
             onChange={(e) => setCode(e.target.value)}
-            placeholder='Verification code'
+            placeholder={t('Verification code')}
             autoComplete='one-time-code'
           />
           <Button
@@ -111,7 +113,7 @@ export function EmailCodeLogin({
             ) : secondsLeft > 0 ? (
               `${secondsLeft}s`
             ) : (
-              'Send code'
+              t('Send code')
             )}
           </Button>
         </div>
@@ -123,7 +125,7 @@ export function EmailCodeLogin({
         disabled={isSubmitting}
       >
         {isSubmitting ? <Loader2 className='animate-spin' /> : <Mail className='h-4 w-4' />}
-        Sign in with code
+        {t('Sign in with code')}
       </Button>
     </form>
   )

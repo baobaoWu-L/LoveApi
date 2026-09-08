@@ -57,6 +57,8 @@ export type PricingModel = {
   billing_expr?: string
   billing_mode_by_group?: Record<string, string>
   billing_expr_by_group?: Record<string, string>
+  pricing_group?: string
+  pricing_tiers?: PublicPricingTier[]
   /** Pricing version returned by backend, useful for cache busting */
   pricing_version?: string
   /**
@@ -73,6 +75,20 @@ export type PricingModel = {
   input_modalities?: Modality[]
   output_modalities?: Modality[]
   capabilities?: ModelCapability[]
+}
+
+export type PublicPricingTier = {
+  label: string
+  conditions?: Array<{ variable: string; operator: string; value: number }>
+  input_price: number
+  output_price: number
+  cache_read_price?: number
+  cache_write_price?: number
+  cache_write_1h_price?: number
+  image_price?: number
+  image_output_price?: number
+  audio_input_price?: number
+  audio_output_price?: number
 }
 
 /** Input/output modalities supported by a model. */

@@ -20,7 +20,11 @@ import { useCallback, useEffect, useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
-import { formatQuota, formatCompactNumber } from '@/lib/format'
+import {
+  formatQuota,
+  formatQuotaAsUSD,
+  formatCompactNumber,
+} from '@/lib/format'
 import {
   Dialog,
   DialogContent,
@@ -119,12 +123,12 @@ export function UserInfoDialog({
             {/* Balance Info */}
             <div className='grid grid-cols-2 gap-4'>
               <InfoItem
-                label={t('Balance')}
-                value={formatQuota(userInfo.quota)}
+                label={`${t('Balance')} (USD)`}
+                value={formatQuotaAsUSD(userInfo.quota)}
               />
               <InfoItem
-                label={t('Used Quota')}
-                value={formatQuota(userInfo.used_quota)}
+                label={`${t('Used Quota')} (USD)`}
+                value={formatQuotaAsUSD(userInfo.used_quota)}
               />
             </div>
 
